@@ -354,45 +354,13 @@ html, body, .mainbody {
 }
 
 /* ================================
-   CALENDAR (xdsoft) — Fillout-style
-   IMPORTANT: xdsoft uses absolute positioning by default.
-   Force flex layout + reset xdsoft's positioning.
+   CALENDAR (xdsoft) — COSMETIC ONLY
+   Origami uses xdsoft as a backend widget but renders its OWN
+   .calendar-section / .summary-section / .time-section UI on top.
+   DO NOT change layout/display of xdsoft elements — only colors.
    ================================ */
 .xdsoft_datetimepicker {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
   font-family: var(--font-heb) !important;
-  position: relative !important;
-  width: 100% !important;
-  display: block !important;
-}
-
-.xdsoft_datetimepicker.xdsoft_inline,
-.xdsoft_datetimepicker.xdsoft_ {
-  display: flex !important;
-  flex-direction: row-reverse !important;
-  gap: 24px !important;
-  align-items: stretch !important;
-  flex-wrap: wrap;
-  width: 100% !important;
-  position: relative !important;
-}
-
-.xdsoft_datetimepicker .xdsoft_datepicker,
-.xdsoft_datetimepicker.xdsoft_inline .xdsoft_datepicker {
-  flex: 1 1 320px !important;
-  background: var(--paper) !important;
-  border: 1.5px solid var(--line) !important;
-  border-radius: var(--radius) !important;
-  padding: 20px !important;
-  width: auto !important;
-  position: relative !important;
-  left: auto !important;
-  top: auto !important;
-  margin: 0 !important;
-  display: block !important;
 }
 
 .xdsoft_mounthpicker {
@@ -570,25 +538,10 @@ div.xdsoft_time.xdsoft_current {
 .xdsoft_date.xdsoft_weekend > div { color: var(--ink-mute); }
 
 /* ================================
-   TIME PICKER — vertical list of pills
+   xdsoft RAW TIME PICKER — KEEP HIDDEN
+   Origami hides it by default (display:none). Don't touch it.
    ================================ */
-.xdsoft_timepicker,
-.xdsoft_datetimepicker .xdsoft_timepicker,
-.xdsoft_datetimepicker.xdsoft_inline .xdsoft_timepicker {
-  flex: 0 0 130px !important;
-  width: 130px !important;
-  margin: 0 !important;
-  padding: 20px 16px !important;
-  background: var(--paper) !important;
-  border: 1.5px solid var(--line) !important;
-  border-radius: var(--radius) !important;
-  position: relative !important;
-  left: auto !important;
-  top: auto !important;
-  right: auto !important;
-  bottom: auto !important;
-  display: block !important;
-}
+/* removed — was forcing display:block, which broke the form */
 
 .xdsoft_time_box {
   border: none !important;
@@ -692,15 +645,7 @@ div.xdsoft_time.xdsoft_current {
 
 .summary-section .row.meeting-time { color: var(--ink) !important; font-weight: 600; }
 
-/* Wrap calendar + summary side-by-side */
-.form_data_element_wrap > .row,
-.calendar-row {
-  display: flex !important;
-  flex-direction: row-reverse !important;
-  gap: 20px !important;
-  align-items: stretch !important;
-  flex-wrap: wrap;
-}
+/* DO NOT FORCE flex on .row — Origami's calendar+summary already have their own layout */
 
 /* The real time slots — div.time ng-repeat in .time-section */
 .time-section {
@@ -908,21 +853,7 @@ form button.btn:hover,
    MOBILE / Responsive
    ================================ */
 
-/* Tablet — stack summary below calendar */
-@media (max-width: 1024px) {
-  .summary-section, .summary-section.desktop-summary {
-    flex: 1 1 100% !important;
-    order: 2;
-  }
-  .calendar-section, .calendar-section.desktop-calendar {
-    flex: 1 1 100% !important;
-    order: 1;
-  }
-  .form_data_element_wrap > .row,
-  .calendar-row {
-    flex-direction: column !important;
-  }
-}
+/* Tablet — don't override Origami's responsive layout, just keep cosmetic */
 
 @media (max-width: 720px) {
   .mainbody { padding: 16px 12px 60px !important; }
