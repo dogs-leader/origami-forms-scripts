@@ -1,366 +1,423 @@
 /* ============================================
-   Dog Leader — Modern & Inviting Form Theme
-   Built 2026-05-31 against real DOM selectors:
+   Origami Webform — Fillout-inspired theme
+   Built 2026-05-31 — robust + reusable for any
+   Origami form (no form-specific assumptions).
+
+   Selectors target the real DOM:
    xdsoft DateTimePicker, Select2, Bootstrap 5,
-   Origami wizard (.step-app + .form_data_element_wrap)
+   .form_data_element_wrap, .step-app
    ============================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Heebo:wght@400;500;600;700&display=swap');
 
 :root {
-  --primary:        #0d9488;
-  --primary-600:    #0f766e;
-  --primary-700:    #115e59;
-  --primary-50:     #f0fdfa;
-  --primary-100:    #ccfbf1;
-  --primary-200:    #99f6e4;
+  --ink:            #18181b;
+  --ink-soft:       #27272a;
+  --ink-mute:       #52525b;
+  --ink-faint:      #71717a;
+  --line:           #e4e4e7;
+  --line-strong:    #d4d4d8;
+  --line-soft:      #f4f4f5;
 
-  --accent:         #f59e0b;
-  --accent-600:     #d97706;
+  --cream:          #fafaf9;
+  --paper:          #ffffff;
+  --paper-soft:     #fafafa;
 
-  --text-900:       #0f172a;
-  --text-700:       #334155;
-  --text-500:       #64748b;
-  --text-400:       #94a3b8;
+  --accent:         #18181b;
+  --accent-soft:    #f4f4f5;
+  --focus:          rgba(24,24,27,.12);
 
-  --border:         #e2e8f0;
-  --border-strong:  #cbd5e1;
+  --success:        #16a34a;
+  --error:          #dc2626;
+  --error-soft:     #fef2f2;
 
-  --surface:        #ffffff;
-  --surface-soft:   #f8fafc;
-  --bg:             #f1f5f9;
+  --radius:         12px;
+  --radius-lg:      16px;
+  --radius-pill:    999px;
 
-  --success:        #10b981;
-  --error:          #ef4444;
-  --warning:        #f59e0b;
+  --shadow-card:    0 1px 3px rgba(24,24,27,.04), 0 1px 2px rgba(24,24,27,.04);
+  --shadow-pop:     0 8px 30px rgba(24,24,27,.06), 0 4px 12px rgba(24,24,27,.04);
+  --shadow-focus:   0 0 0 4px var(--focus);
 
-  --radius-sm:      10px;
-  --radius:         14px;
-  --radius-lg:      20px;
+  --t-fast:         .15s cubic-bezier(.4,0,.2,1);
+  --t:              .2s cubic-bezier(.4,0,.2,1);
 
-  --shadow-sm:      0 1px 2px rgba(15,23,42,.04);
-  --shadow:         0 4px 12px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04);
-  --shadow-md:      0 10px 25px rgba(15,23,42,.08), 0 4px 10px rgba(15,23,42,.05);
-  --shadow-lg:      0 25px 50px rgba(15,23,42,.10), 0 10px 20px rgba(15,23,42,.06);
-  --shadow-focus:   0 0 0 4px rgba(13,148,136,.18);
-
-  --transition:     all .2s cubic-bezier(.4,0,.2,1);
+  --font-ui:        'Inter','Heebo',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-heb:       'Heebo','Inter',system-ui,sans-serif;
 }
 
-/* =====================================================
-   Base — body + font
-   ===================================================== */
-.mainbody, body.mainbody {
-  font-family: 'Heebo', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
-  background: linear-gradient(135deg, #e0f7f5 0%, #fef3e2 100%) !important;
-  color: var(--text-900) !important;
+/* ================================
+   BASE — reset, body, font
+   ================================ */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, .mainbody {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-family: var(--font-heb) !important;
+  font-feature-settings: 'ss01','cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--cream) !important;
+  color: var(--ink) !important;
+  line-height: 1.55;
+}
+
+.mainbody {
   min-height: 100vh;
-  padding: 24px 16px !important;
+  padding: 48px 16px 80px !important;
+  direction: rtl;
 }
 
-* { box-sizing: border-box; }
-
-/* =====================================================
-   Form container — wizard frame
-   ===================================================== */
+/* ================================
+   FORM CONTAINER — one flowing card
+   ================================ */
 .webforms_form, #form-entity {
-  max-width: 920px;
+  max-width: 640px;
   margin: 0 auto;
 }
 
 .step-app-container {
-  background: var(--surface);
+  background: var(--paper);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  padding: 32px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--line);
+  padding: 56px 48px 40px;
   position: relative;
-  overflow: visible;
 }
 
-.step-app {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
+.step-app { display: flex; flex-direction: column; gap: 0; }
 
 .step-content {
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  animation: stepFadeIn .35s cubic-bezier(.4,0,.2,1);
+  gap: 36px;
+  animation: fadeUp .35s cubic-bezier(.4,0,.2,1);
 }
 
-@keyframes stepFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* =====================================================
-   Group / Section headers
-   ===================================================== */
+/* ================================
+   GROUP HEADERS — clean, no boxes
+   ================================ */
 .field_group_name_header {
-  font-size: 20px;
+  font-family: var(--font-heb);
+  font-size: 22px;
   font-weight: 700;
-  color: var(--text-900);
-  margin: 0 0 4px;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, var(--primary-50) 0%, #ffffff 100%);
-  border-right: 4px solid var(--primary);
-  border-radius: var(--radius);
-  letter-spacing: -0.01em;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 16px 0 8px;
+  padding: 0;
+  background: transparent !important;
+  border: none !important;
+  display: block;
 }
 
-.field_group_name_header::before {
+.field_group_name_header:first-child { margin-top: 0; }
+
+/* Subtle divider line between groups */
+.field_group_name_header::after {
   content: '';
-  width: 8px;
-  height: 8px;
-  background: var(--primary);
-  border-radius: 50%;
-  box-shadow: 0 0 0 4px var(--primary-100);
+  display: block;
+  width: 32px;
+  height: 3px;
+  background: var(--ink);
+  border-radius: var(--radius-pill);
+  margin-top: 10px;
 }
 
-/* =====================================================
-   Field rows + labels
-   ===================================================== */
+/* ================================
+   FIELD ROWS — flat, no card
+   ================================ */
 .form_data_element_wrap {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  transition: var(--transition);
-  margin-bottom: 12px;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  transition: none !important;
+  box-shadow: none !important;
 }
 
-.form_data_element_wrap:hover {
-  border-color: var(--primary-200);
-  box-shadow: var(--shadow-sm);
-}
-
+.form_data_element_wrap:hover,
 .form_data_element_wrap:focus-within {
-  border-color: var(--primary);
-  box-shadow: var(--shadow-focus);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .field_name_wrapper { margin-bottom: 8px; }
 
 .field_name, .form-label {
-  font-size: 13px !important;
-  font-weight: 600 !important;
-  color: var(--text-700) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: var(--ink-mute) !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
   margin-bottom: 6px !important;
+  display: block !important;
 }
 
 .required {
-  color: var(--accent-600) !important;
-  font-weight: 700;
+  color: var(--ink-faint) !important;
+  font-weight: 500;
+  margin-inline-start: 2px;
 }
 
 .error_msg {
   color: var(--error);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
-  margin-top: 4px;
-  padding: 6px 10px;
-  background: #fef2f2;
-  border-radius: 8px;
-  border-right: 3px solid var(--error);
+  margin-top: 6px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-/* =====================================================
-   Inputs (text / textarea / number)
-   ===================================================== */
+.error_msg::before {
+  content: '!';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: var(--error);
+  color: white;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ================================
+   INPUTS — big, clean, generous
+   ================================ */
 .inputrow input[type="text"],
 .inputrow input[type="number"],
 .inputrow input[type="email"],
 .inputrow input[type="tel"],
 .inputrow input[type="date"],
+.inputrow input[type="password"],
 .inputrow textarea,
 .form_data_element_wrap input[type="text"]:not(.select2-input):not(.select2-focusser),
+.form_data_element_wrap input[type="number"],
 .form_data_element_wrap textarea {
   width: 100% !important;
-  padding: 11px 14px !important;
-  border: 1.5px solid var(--border) !important;
-  border-radius: var(--radius-sm) !important;
-  background: var(--surface-soft) !important;
+  height: 52px !important;
+  padding: 0 16px !important;
+  border: 1.5px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  background: var(--paper) !important;
   font-family: inherit !important;
-  font-size: 14px !important;
-  color: var(--text-900) !important;
-  transition: var(--transition) !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  color: var(--ink) !important;
+  transition: var(--t) !important;
   outline: none !important;
+  box-shadow: none !important;
+  line-height: 52px !important;
 }
 
-.inputrow input:hover, .inputrow textarea:hover {
-  border-color: var(--border-strong) !important;
-  background: var(--surface) !important;
-}
-
-.inputrow input:focus, .inputrow textarea:focus {
-  border-color: var(--primary) !important;
-  background: var(--surface) !important;
-  box-shadow: var(--shadow-focus) !important;
-}
-
-.inputrow textarea {
-  min-height: 88px;
+.inputrow textarea,
+.form_data_element_wrap textarea {
+  height: auto !important;
+  min-height: 110px !important;
+  padding: 14px 16px !important;
+  line-height: 1.6 !important;
   resize: vertical;
 }
 
-/* =====================================================
-   Select2 dropdowns — full restyle
-   ===================================================== */
-.select2-container {
-  width: 100% !important;
+.inputrow input::placeholder,
+.inputrow textarea::placeholder,
+.form_data_element_wrap input::placeholder {
+  color: var(--ink-faint) !important;
+  font-weight: 400;
 }
 
+.inputrow input:hover,
+.inputrow textarea:hover,
+.form_data_element_wrap input:hover {
+  border-color: var(--line-strong) !important;
+}
+
+.inputrow input:focus,
+.inputrow textarea:focus,
+.form_data_element_wrap input:focus {
+  border-color: var(--ink) !important;
+  box-shadow: var(--shadow-focus) !important;
+  background: var(--paper) !important;
+}
+
+/* ================================
+   SELECT2 — restyle as clean dropdown
+   ================================ */
+.select2-container { width: 100% !important; }
+
 .select2-container .select2-choice {
-  height: auto !important;
-  padding: 10px 14px !important;
-  border: 1.5px solid var(--border) !important;
-  border-radius: var(--radius-sm) !important;
-  background: var(--surface-soft) !important;
+  height: 52px !important;
+  padding: 0 16px !important;
+  border: 1.5px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  background: var(--paper) !important;
   background-image: none !important;
   box-shadow: none !important;
-  font-size: 14px !important;
-  color: var(--text-900) !important;
-  transition: var(--transition) !important;
-  line-height: 1.5 !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  color: var(--ink) !important;
+  line-height: 52px !important;
+  transition: var(--t) !important;
 }
 
 .select2-container .select2-choice:hover {
-  border-color: var(--border-strong) !important;
-  background: var(--surface) !important;
+  border-color: var(--line-strong) !important;
 }
 
 .select2-container.select2-dropdown-open .select2-choice,
 .select2-container .select2-choice:focus {
-  border-color: var(--primary) !important;
-  background: var(--surface) !important;
+  border-color: var(--ink) !important;
   box-shadow: var(--shadow-focus) !important;
 }
 
 .select2-container .select2-choice .select2-arrow {
   background: transparent !important;
   border: none !important;
-  width: 28px !important;
+  width: 36px !important;
+  position: absolute !important;
+  left: 4px !important;
+  right: auto !important;
+  top: 0 !important;
+  height: 100% !important;
 }
 
 .select2-container .select2-choice .select2-arrow b {
-  background-position: -2px 4px !important;
-  opacity: .6;
+  background-image: none !important;
+  position: relative;
+  display: block;
+  width: 10px;
+  height: 10px;
+  margin: 21px auto 0;
+  border-right: 2px solid var(--ink-mute);
+  border-bottom: 2px solid var(--ink-mute);
+  transform: rotate(45deg);
 }
 
-.select2-chosen { color: var(--text-900) !important; }
+.select2-chosen { color: var(--ink) !important; }
+
+.select2-default .select2-chosen { color: var(--ink-faint) !important; font-weight: 400; }
 
 .select2-drop {
-  border: 1px solid var(--border) !important;
-  border-radius: var(--radius-sm) !important;
-  box-shadow: var(--shadow-md) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow-pop) !important;
   margin-top: 6px !important;
   overflow: hidden;
+  padding: 6px !important;
+  background: var(--paper) !important;
 }
 
-.select2-search { padding: 8px !important; }
+.select2-search { padding: 4px 4px 8px !important; }
 
 .select2-search input {
-  border: 1.5px solid var(--border) !important;
+  border: 1.5px solid var(--line) !important;
   border-radius: 8px !important;
-  padding: 8px 12px !important;
+  padding: 10px 14px !important;
   background-image: none !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
 }
 
-.select2-results {
-  padding: 4px !important;
-  max-height: 280px !important;
-}
+.select2-results { padding: 0 !important; max-height: 300px !important; }
 
 .select2-results .select2-result-label {
-  padding: 10px 12px !important;
+  padding: 12px 14px !important;
   border-radius: 8px !important;
-  font-size: 14px !important;
-  color: var(--text-700) !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  color: var(--ink) !important;
   cursor: pointer;
-  transition: var(--transition);
+  transition: var(--t-fast);
 }
 
 .select2-results .select2-highlighted {
-  background: var(--primary) !important;
+  background: var(--accent-soft) !important;
+  color: var(--ink) !important;
+}
+
+.select2-results .select2-result.select2-selected .select2-result-label {
+  background: var(--ink) !important;
   color: white !important;
 }
 
-.select2-results .select2-result:hover .select2-result-label {
-  background: var(--primary-50);
-  color: var(--primary-700) !important;
-}
-
-/* =====================================================
-   xdsoft DateTimePicker — Calendar
-   ===================================================== */
+/* ================================
+   CALENDAR (xdsoft) — Fillout-style
+   ================================ */
 .xdsoft_datetimepicker {
-  background: var(--surface) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: var(--radius) !important;
-  box-shadow: var(--shadow-md) !important;
-  padding: 16px !important;
-  font-family: 'Heebo', sans-serif !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  font-family: var(--font-heb) !important;
 }
 
 .xdsoft_datetimepicker.xdsoft_inline {
-  box-shadow: none !important;
-  border: none !important;
-  background: transparent !important;
-  padding: 0 !important;
+  display: flex !important;
+  flex-direction: row-reverse !important;
+  gap: 24px !important;
+  align-items: stretch !important;
+  flex-wrap: wrap;
 }
 
 .xdsoft_datepicker {
-  width: auto !important;
-  background: var(--surface);
+  flex: 1 1 320px;
+  background: var(--paper);
+  border: 1.5px solid var(--line);
   border-radius: var(--radius);
   padding: 20px;
-  box-shadow: var(--shadow-sm);
+  width: auto !important;
 }
 
 .xdsoft_mounthpicker {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 0 16px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--border);
+  padding: 0 0 14px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .xdsoft_label {
-  color: var(--text-900) !important;
-  font-weight: 700 !important;
-  font-size: 16px !important;
-  padding: 6px 12px !important;
+  color: var(--ink) !important;
+  font-weight: 600 !important;
+  font-size: 15px !important;
+  padding: 6px 10px !important;
   border-radius: 8px;
   cursor: pointer;
   background: transparent !important;
-  transition: var(--transition);
+  transition: var(--t-fast);
 }
-
-.xdsoft_label:hover { background: var(--primary-50) !important; }
+.xdsoft_label:hover { background: var(--accent-soft) !important; }
 
 .xdsoft_prev, .xdsoft_next {
-  width: 36px !important;
-  height: 36px !important;
-  background: var(--primary-50) !important;
-  border-radius: 10px !important;
+  width: 32px !important;
+  height: 32px !important;
+  background: transparent !important;
+  border: 1.5px solid var(--line) !important;
+  border-radius: 8px !important;
   background-image: none !important;
   position: relative;
-  transition: var(--transition);
+  transition: var(--t-fast);
   cursor: pointer;
   float: none !important;
 }
 
 .xdsoft_prev:hover, .xdsoft_next:hover {
-  background: var(--primary) !important;
+  background: var(--ink) !important;
+  border-color: var(--ink) !important;
 }
 
 .xdsoft_prev::after, .xdsoft_next::after {
@@ -368,34 +425,32 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 8px;
-  height: 8px;
-  border-right: 2.5px solid var(--primary-700);
-  border-top: 2.5px solid var(--primary-700);
-  transform: translate(-50%, -50%) rotate(45deg);
-  transition: var(--transition);
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--ink-mute);
+  border-top: 2px solid var(--ink-mute);
+  transition: var(--t-fast);
 }
 
 .xdsoft_next::after { transform: translate(-50%, -50%) rotate(45deg); }
 .xdsoft_prev::after { transform: translate(-50%, -50%) rotate(-135deg); }
-
 .xdsoft_prev:hover::after, .xdsoft_next:hover::after { border-color: white; }
 
 .xdsoft_calendar { width: 100% !important; }
 
 .xdsoft_calendar table {
   border-collapse: separate !important;
-  border-spacing: 4px !important;
+  border-spacing: 2px !important;
   width: 100% !important;
 }
 
 .xdsoft_calendar th {
-  color: var(--text-500) !important;
-  font-weight: 600 !important;
-  font-size: 12px !important;
+  color: var(--ink-faint) !important;
+  font-weight: 500 !important;
+  font-size: 11px !important;
   text-transform: uppercase;
-  letter-spacing: .05em;
-  padding: 8px 0 !important;
+  letter-spacing: .08em;
+  padding: 10px 0 !important;
   background: transparent !important;
   border: none !important;
 }
@@ -409,31 +464,28 @@
 }
 
 .xdsoft_calendar td > div {
-  width: 40px !important;
-  height: 40px !important;
+  width: 38px !important;
+  height: 38px !important;
   margin: 0 auto !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  border-radius: 50% !important;
+  border-radius: 10px !important;
   font-size: 14px !important;
   font-weight: 500 !important;
-  color: var(--text-700) !important;
+  color: var(--ink) !important;
   cursor: pointer;
-  transition: var(--transition);
+  transition: var(--t-fast);
   position: relative;
 }
 
 .xdsoft_calendar td:not(.xdsoft_disabled):hover > div {
-  background: var(--primary-50) !important;
-  color: var(--primary-700) !important;
-  font-weight: 600 !important;
-  transform: scale(1.05);
+  background: var(--accent-soft) !important;
 }
 
 .xdsoft_date.xdsoft_today > div {
-  color: var(--accent-600) !important;
   font-weight: 700 !important;
+  color: var(--ink) !important;
 }
 
 .xdsoft_date.xdsoft_today > div::after {
@@ -444,93 +496,77 @@
   transform: translateX(-50%);
   width: 4px;
   height: 4px;
-  background: var(--accent);
+  background: var(--ink);
   border-radius: 50%;
 }
 
 .xdsoft_date.xdsoft_current > div {
-  background: var(--primary) !important;
+  background: var(--ink) !important;
   color: white !important;
-  font-weight: 700 !important;
-  box-shadow: 0 4px 12px rgba(13,148,136,.4) !important;
-  transform: scale(1);
+  font-weight: 600 !important;
 }
 
 .xdsoft_date.xdsoft_current:hover > div {
-  background: var(--primary-700) !important;
-  transform: scale(1.05);
+  background: var(--ink-soft) !important;
 }
 
 .xdsoft_date.xdsoft_disabled > div {
-  color: var(--text-400) !important;
+  color: var(--line-strong) !important;
   cursor: not-allowed !important;
-  opacity: .4;
 }
 
-.xdsoft_date.xdsoft_disabled:hover > div {
-  background: transparent !important;
-  transform: none;
-}
+.xdsoft_date.xdsoft_disabled:hover > div { background: transparent !important; }
+.xdsoft_date.xdsoft_other_month > div { opacity: .3; }
+.xdsoft_date.xdsoft_weekend > div { color: var(--ink-mute); }
 
-.xdsoft_date.xdsoft_other_month > div {
-  opacity: .3;
-}
-
-.xdsoft_date.xdsoft_weekend > div {
-  color: var(--text-500);
-}
-
-/* =====================================================
-   xdsoft TimePicker — time slots column
-   ===================================================== */
+/* ================================
+   TIME PICKER — vertical list of pills
+   ================================ */
 .xdsoft_timepicker {
-  width: 110px !important;
-  padding: 0 !important;
-  margin-right: 16px !important;
-  background: var(--surface) !important;
+  flex: 0 0 130px !important;
+  width: auto !important;
+  margin: 0 !important;
+  padding: 20px 16px !important;
+  background: var(--paper);
+  border: 1.5px solid var(--line);
   border-radius: var(--radius);
-  padding: 20px 12px !important;
-  box-shadow: var(--shadow-sm);
 }
 
 .xdsoft_time_box {
   border: none !important;
   border-radius: 0 !important;
-  height: 280px !important;
+  height: 320px !important;
+  padding-right: 6px;
 }
 
 .xdsoft_time_variant { padding: 0 !important; }
 
 .xdsoft_time {
-  padding: 10px 14px !important;
+  display: block !important;
+  padding: 13px 16px !important;
   margin-bottom: 6px !important;
-  background: var(--surface-soft) !important;
-  border: 1.5px solid var(--border) !important;
+  background: var(--paper) !important;
+  border: 1.5px solid var(--line) !important;
   border-radius: 10px !important;
-  font-size: 14px !important;
+  font-size: 15px !important;
   font-weight: 600 !important;
-  color: var(--text-700) !important;
+  color: var(--ink) !important;
   text-align: center !important;
   cursor: pointer;
-  transition: var(--transition);
+  transition: var(--t-fast);
   height: auto !important;
-  line-height: 1.2 !important;
+  line-height: 1 !important;
 }
 
 .xdsoft_time:not(.xdsoft_disabled):hover {
-  background: var(--primary-50) !important;
-  border-color: var(--primary) !important;
-  color: var(--primary-700) !important;
-  transform: translateX(-2px);
-  box-shadow: 0 2px 8px rgba(13,148,136,.15);
+  border-color: var(--ink) !important;
+  background: var(--accent-soft) !important;
 }
 
 .xdsoft_time.xdsoft_current {
-  background: var(--primary) !important;
-  border-color: var(--primary) !important;
+  background: var(--ink) !important;
+  border-color: var(--ink) !important;
   color: white !important;
-  font-weight: 700 !important;
-  box-shadow: 0 4px 12px rgba(13,148,136,.35) !important;
 }
 
 .xdsoft_time.xdsoft_disabled {
@@ -542,151 +578,194 @@
 .xdsoft_scroller_box { background: transparent !important; }
 .xdsoft_scrollbar { width: 4px !important; }
 .xdsoft_scroller {
-  background: var(--primary-200) !important;
+  background: var(--line-strong) !important;
   border-radius: 4px !important;
 }
 
-/* Hide the next/prev arrows on the time column — slots scroll instead */
 .xdsoft_timepicker > .xdsoft_prev,
 .xdsoft_timepicker > .xdsoft_next { display: none !important; }
 
-/* =====================================================
-   Submit button
-   ===================================================== */
-.btn, .step-navigation button, button[ng-click*="submit" i] {
-  font-family: inherit !important;
-  font-size: 16px !important;
-  font-weight: 700 !important;
-  padding: 14px 32px !important;
+/* ================================
+   SUBMIT BUTTON — big, dark, Fillout-style
+   Higher specificity to beat Origami defaults
+   ================================ */
+.step-navigation { display: flex !important; justify-content: center !important; margin-top: 32px !important; padding-top: 0 !important; border-top: none !important; }
+
+.step-navigation .btn,
+.step-navigation button,
+.step-navigation button.btn,
+form .step-navigation button,
+form .step-navigation .btn,
+button.btn.next-button,
+button.btn.submit-button,
+.btn-primary,
+input[type="submit"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  font-family: var(--font-heb) !important;
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  padding: 16px 32px !important;
   border-radius: var(--radius) !important;
   border: none !important;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%) !important;
-  color: white !important;
+  background: var(--ink) !important;
+  background-image: none !important;
+  color: var(--paper) !important;
   cursor: pointer;
-  transition: var(--transition) !important;
-  box-shadow: 0 4px 14px rgba(13,148,136,.35) !important;
+  transition: var(--t) !important;
+  box-shadow: 0 1px 3px rgba(24,24,27,.12), 0 1px 2px rgba(24,24,27,.06) !important;
   letter-spacing: 0 !important;
-  min-height: 52px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  min-height: 56px;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   gap: 8px;
+  text-shadow: none !important;
 }
 
-.btn:hover, .step-navigation button:hover {
-  background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%) !important;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(13,148,136,.4) !important;
+.step-navigation button:hover,
+.step-navigation .btn:hover,
+form button.btn:hover,
+.btn-primary:hover {
+  background: var(--ink-soft) !important;
+  color: white !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(24,24,27,.15), 0 2px 4px rgba(24,24,27,.08) !important;
 }
 
-.btn:active, .step-navigation button:active {
+.step-navigation button:active,
+.step-navigation .btn:active {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(13,148,136,.3) !important;
+  box-shadow: 0 1px 2px rgba(24,24,27,.1) !important;
 }
 
-.step-navigation {
-  display: flex;
-  justify-content: center;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
+/* Hide the previous "back" button if any */
+.step-navigation .prev-button,
+.step-navigation button[ng-click*="prev"] {
+  background: transparent !important;
+  color: var(--ink-mute) !important;
+  border: 1.5px solid var(--line) !important;
+  max-width: 140px !important;
+  margin-inline-end: 12px;
 }
 
-.step-navigation button {
-  width: 100%;
-  max-width: 420px;
+/* ================================
+   BOOTSTRAP GRID — tighten gaps
+   ================================ */
+.row {
+  row-gap: 20px !important;
+  margin-left: -8px !important;
+  margin-right: -8px !important;
 }
 
-/* =====================================================
-   Calendar + Time layout — side-by-side in selected-time block
-   ===================================================== */
-.xdsoft_datetimepicker.xdsoft_inline {
-  display: flex !important;
-  flex-direction: row-reverse !important;
-  gap: 20px !important;
-  align-items: stretch !important;
-  flex-wrap: wrap;
-}
-
-.xdsoft_datetimepicker.xdsoft_inline .xdsoft_datepicker { flex: 1 1 380px; }
-.xdsoft_datetimepicker.xdsoft_inline .xdsoft_timepicker { flex: 0 0 130px; margin: 0 !important; }
-
-/* =====================================================
-   Bootstrap grid tweaks
-   ===================================================== */
-.row { row-gap: 16px; }
-
-.col-sm-6, .col-md-4, .col-md-6, .col-md-12 {
+.col-sm-6, .col-md-4, .col-md-6, .col-md-12, .col-xs-12 {
   padding-left: 8px !important;
   padding-right: 8px !important;
 }
 
-/* =====================================================
-   Mobile / Responsive
-   ===================================================== */
-@media (max-width: 768px) {
-  .mainbody { padding: 12px 8px !important; }
-  .step-app-container { padding: 20px 16px; border-radius: var(--radius); }
-  .field_group_name_header { font-size: 17px; padding: 12px 14px; }
-  .form_data_element_wrap { padding: 12px 14px; }
+/* ================================
+   PROGRESS BAR (added by JS)
+   ================================ */
+.fillout-progress {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 3px;
+  background: var(--line-soft);
+  margin: -56px -48px 36px;
+  overflow: hidden;
+}
+
+.fillout-progress__bar {
+  height: 100%;
+  width: 0%;
+  background: var(--ink);
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+  transition: width .4s cubic-bezier(.4,0,.2,1);
+}
+
+/* Focused field highlight (added by JS via .fillout-focused) */
+.fillout-focused .field_name {
+  color: var(--ink) !important;
+  font-weight: 600 !important;
+}
+
+/* ================================
+   THANK YOU / response page
+   ================================ */
+.webform_response_text, .thank-you-message {
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+/* ================================
+   MOBILE / Responsive
+   ================================ */
+@media (max-width: 720px) {
+  .mainbody { padding: 16px 12px 60px !important; }
+  .step-app-container { padding: 32px 24px 28px; border-radius: var(--radius); }
+  .step-content { gap: 28px; }
+
+  .field_group_name_header { font-size: 19px; }
+
+  .inputrow input,
+  .inputrow textarea,
+  .form_data_element_wrap input,
+  .select2-container .select2-choice {
+    height: 48px !important;
+    font-size: 16px !important;
+    line-height: 48px !important;
+  }
 
   .xdsoft_datetimepicker.xdsoft_inline {
     flex-direction: column !important;
     align-items: stretch !important;
+    gap: 16px !important;
   }
-  .xdsoft_datetimepicker.xdsoft_inline .xdsoft_timepicker {
-    width: 100% !important;
-    flex: 1 1 auto;
+  .xdsoft_timepicker {
+    flex: 1 1 auto !important;
+    padding: 16px !important;
   }
   .xdsoft_time_box {
     height: auto !important;
-    max-height: 200px !important;
+    max-height: 240px !important;
     display: grid !important;
     grid-template-columns: repeat(3, 1fr);
     gap: 6px;
+    padding-right: 0;
   }
-  .xdsoft_time { margin-bottom: 0 !important; }
+  .xdsoft_time { margin-bottom: 0 !important; padding: 12px 8px !important; }
 
-  .col-sm-6, .col-md-4 { flex: 0 0 100% !important; max-width: 100% !important; }
+  .col-sm-6, .col-md-4 {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+
+  .fillout-progress { margin: -32px -24px 28px; }
 }
 
-/* =====================================================
-   Hide noisy elements (status field that's locked, etc.)
-   Optional — comment out if you want them visible
-   ===================================================== */
-.select2-offscreen { /* keep accessible, just visually hidden by Select2 itself */ }
-
-/* =====================================================
-   Subtle entrance animation for groups
-   ===================================================== */
-.field_group_name_header,
-.form_data_element_wrap {
-  animation: rowIn .4s cubic-bezier(.4,0,.2,1) backwards;
+/* ================================
+   Powered-by — subtle
+   ================================ */
+.powered_by, [class*="powered"], a[href*="origami"]:not(.btn) {
+  text-align: center !important;
+  margin-top: 24px !important;
+  opacity: .4 !important;
+  font-size: 11px !important;
+  color: var(--ink-faint) !important;
+  font-weight: 400 !important;
 }
 
-.form_data_element_wrap:nth-child(1)  { animation-delay: .05s; }
-.form_data_element_wrap:nth-child(2)  { animation-delay: .10s; }
-.form_data_element_wrap:nth-child(3)  { animation-delay: .15s; }
-.form_data_element_wrap:nth-child(4)  { animation-delay: .20s; }
-.form_data_element_wrap:nth-child(5)  { animation-delay: .25s; }
-.form_data_element_wrap:nth-child(6)  { animation-delay: .30s; }
+/* ================================
+   Misc Origami quirks
+   ================================ */
+.webform_wizard_content { background: transparent !important; }
+.step-app-container > div:first-child { margin-top: 0; }
 
-@keyframes rowIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* =====================================================
-   Powered-by footer + misc
-   ===================================================== */
-.powered_by, [class*="powered"] {
-  text-align: center;
-  margin-top: 24px;
-  opacity: .5;
-  font-size: 12px;
-}
-
-/* RTL fine-tune for Hebrew */
-.mainbody { direction: rtl; }
-.field_group_name_header { border-right: 4px solid var(--primary); border-left: none; }
-.error_msg { border-right: 3px solid var(--error); border-left: none; }
+/* Hide unnecessary "step indicator" if Origami adds one */
+.step-indicator,
+.steps-progress { display: none !important; }
