@@ -452,6 +452,19 @@ const OH = (() => {
       document.addEventListener("change", handler, true);
       document.addEventListener("input",  handler, true);
 
+      // BUG FIX 2026-06-01: Select2 dispatches its change via jQuery's event system, which
+      // doesn't always reach native DOM addEventListener handlers (verified in dogsleader prod —
+      // picking a value in the Select2 dropdown did NOT trigger the address auto-fill).
+      // Hook into jQuery's event system as a fallback so Select2 picks DO trigger applyAddressForContext.
+      if (typeof window.$ === "function") {
+        try {
+          window.$(document).on("change", "select[name^='fld_']", function(e) {
+            handler({ target: this });
+          });
+          mlog("✅ jQuery change listener attached (Select2 compat)");
+        } catch (e) { mwarn("could not attach jQuery listener:", e); }
+      }
+
       watchDynamicFields();
       // Warm pension-address cache so the override is instant when user picks a pension subtype.
       fetchPensionAddress().catch(e => warn("pension fetch warm-up error:", e));
