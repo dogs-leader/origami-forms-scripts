@@ -465,3 +465,181 @@ function applyContact(id, text) {
 function applyCustomerType(valueTextOrId) {
   OH.setBasicValue(MEETING_CFG.meetingForField, valueTextOrId);
 }
+
+
+
+/* ============================================================
+ * Fillout-style UX enhancements — APPENDED 2026-05-31.
+ * Robust + reusable for any Origami webform.
+ *
+ * What it does:
+ *  1. Sticky top progress bar that tracks filled fields.
+ *  2. Smooth scroll: when a field gets focus, scroll it gently into view.
+ *  3. Enter-to-advance: pressing Enter inside a single-line input moves
+ *     focus to the next visible field (textareas keep multi-line behavior).
+ *  4. Focus glow: the currently-focused field's label highlights.
+ *  5. Live error clearing: when user starts typing, hide the error_msg.
+ *
+ * SAFE: only DOM decoration. Never mutates field values, never submits.
+ * Does NOT depend on form structure — discovers fields at runtime.
+ * ============================================================ */
+(function FilloutEnhancements() {
+  'use strict';
+
+  // ── Run inside the iframe (the live form is inside an iframe; this script
+  //    may load either at the iframe scope or the outer scope. Detect.)
+  const root = (typeof document !== 'undefined') ? document : null;
+  if (!root || !root.body) return;
+
+  // ── Find the form root. Bail out gracefully if not present.
+  function $form() {
+    return root.querySelector('.step-app-container') || root.querySelector('#form-entity') || root.querySelector('form.webforms_form');
+  }
+
+  // ── Wait for the form to actually render (Angular bootstrap takes ~4-7s).
+  function whenFormReady(cb, attempts = 60) {
+    if ($form() && root.querySelector('.form_data_element_wrap')) return cb();
+    if (attempts <= 0) return;
+    setTimeout(() => whenFormReady(cb, attempts - 1), 250);
+  }
+
+  // ── Get all field wrappers in DOM order.
+  function fieldWrappers() {
+    return Array.from(root.querySelectorAll('.form_data_element_wrap'));
+  }
+
+  // ── Determine whether a wrapper is "filled" (has any non-empty value).
+  function isFilled(wrap) {
+    const inputs = wrap.querySelectorAll('input, textarea, select');
+    for (const el of inputs) {
+      if (el.classList.contains('select2-offscreen') || el.classList.contains('select2-input') || el.classList.contains('select2-focusser')) continue;
+      const v = (el.value || '').trim();
+      if (v && v !== '0' && v !== '- בחר -') return true;
+    }
+    // Select2 visible text
+    const chosen = wrap.querySelector('.select2-chosen');
+    if (chosen && chosen.textContent && chosen.textContent.trim() && !wrap.querySelector('.select2-container.select2-default')) return true;
+    // Calendar selected
+    if (wrap.querySelector('.xdsoft_date.xdsoft_current, .xdsoft_time.xdsoft_current')) return true;
+    return false;
+  }
+
+  // ── PROGRESS BAR ──
+  function ensureProgressBar() {
+    const f = $form();
+    if (!f || f.querySelector('.fillout-progress')) return f && f.querySelector('.fillout-progress');
+    const bar = root.createElement('div');
+    bar.className = 'fillout-progress';
+    bar.innerHTML = '<div class="fillout-progress__bar"></div>';
+    f.insertBefore(bar, f.firstChild);
+    return bar;
+  }
+
+  function updateProgress() {
+    const bar = ensureProgressBar();
+    if (!bar) return;
+    const ws = fieldWrappers();
+    if (!ws.length) return;
+    // Count only wrappers that are visible
+    const visible = ws.filter(w => w.offsetParent !== null);
+    if (!visible.length) return;
+    const filled = visible.filter(isFilled).length;
+    const pct = Math.min(100, Math.round((filled / visible.length) * 100));
+    const inner = bar.querySelector('.fillout-progress__bar');
+    if (inner) inner.style.width = pct + '%';
+  }
+
+  // ── SMOOTH SCROLL on focus ──
+  function attachScrollOnFocus() {
+    root.addEventListener('focusin', (e) => {
+      const wrap = e.target.closest && e.target.closest('.form_data_element_wrap');
+      if (!wrap) return;
+      // Decorate
+      root.querySelectorAll('.fillout-focused').forEach(el => el.classList.remove('fillout-focused'));
+      wrap.classList.add('fillout-focused');
+      // Don't scroll if already in view
+      const rect = wrap.getBoundingClientRect();
+      const vh = window.innerHeight || root.documentElement.clientHeight;
+      if (rect.top > 80 && rect.bottom < vh - 80) return;
+      wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    root.addEventListener('focusout', (e) => {
+      // Keep highlight briefly so it doesn't flicker
+      setTimeout(() => {
+        if (!root.activeElement || !root.activeElement.closest('.form_data_element_wrap')) {
+          root.querySelectorAll('.fillout-focused').forEach(el => el.classList.remove('fillout-focused'));
+        }
+      }, 50);
+    });
+  }
+
+  // ── ENTER to advance ──
+  function attachEnterToAdvance() {
+    root.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      // Don't intercept textareas (allow newline) or select2 search
+      if (e.target.tagName === 'TEXTAREA') return;
+      if (e.target.classList && e.target.classList.contains('select2-input')) return;
+      // Don't intercept submit button
+      if (e.target.tagName === 'BUTTON' || e.target.type === 'submit') return;
+
+      // Don't intercept if inside select2 dropdown
+      if (e.target.closest && e.target.closest('.select2-drop')) return;
+
+      e.preventDefault();
+      const wrap = e.target.closest && e.target.closest('.form_data_element_wrap');
+      if (!wrap) return;
+      const all = fieldWrappers().filter(w => w.offsetParent !== null);
+      const idx = all.indexOf(wrap);
+      if (idx < 0 || idx >= all.length - 1) {
+        // Last field — try to focus submit
+        const submit = root.querySelector('.step-navigation button, button[ng-click*="submit"]');
+        if (submit) submit.focus();
+        return;
+      }
+      const next = all[idx + 1];
+      const focusable = next.querySelector('input:not(.select2-offscreen):not(.select2-focusser), textarea, .select2-choice');
+      if (focusable) focusable.focus();
+    });
+  }
+
+  // ── Clear error messages live as user types ──
+  function attachLiveErrorClear() {
+    root.addEventListener('input', (e) => {
+      const wrap = e.target.closest && e.target.closest('.form_data_element_wrap');
+      if (!wrap) return;
+      const err = wrap.querySelector('.error_msg');
+      if (err) err.style.display = 'none';
+    });
+  }
+
+  // ── BOOT ──
+  whenFormReady(() => {
+    try {
+      ensureProgressBar();
+      attachScrollOnFocus();
+      attachEnterToAdvance();
+      attachLiveErrorClear();
+      updateProgress();
+
+      // Re-run progress on any DOM mutation (xdsoft selections, select2 changes)
+      const obs = new MutationObserver(debounce(updateProgress, 200));
+      const formEl = $form();
+      if (formEl) obs.observe(formEl, { childList: true, subtree: true, attributes: true, attributeFilter: ['class','value'] });
+
+      // Also on user actions
+      ['change', 'click', 'input'].forEach(ev => root.addEventListener(ev, debounce(updateProgress, 150), true));
+    } catch (e) {
+      console.warn('[Fillout enhancements] init failed:', e);
+    }
+  });
+
+  function debounce(fn, ms) {
+    let t = null;
+    return function () {
+      const args = arguments;
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(null, args), ms);
+    };
+  }
+})();
