@@ -274,13 +274,18 @@ const OH = (() => {
       if (meetingFor === norm("עובד")) return true;
       // Explicit pension subtypes
       if (C.pensionSubtypes.some(s => norm(s) === subtype)) return true;
-      // sub2 (fld_1369 — "סוג פגישת אבחון/אילוף") is conditional on subtype IN {אבחון, שיעור אילוף}.
-      // BUG FIX 2026-06-01: previously sub2 was checked regardless, causing stale "בפנסיון" to
-      // keep pension active after user switched subtype to non-related types.
-      // BUG FIX 2026-06-01 (second pass): the conditional shows for BOTH אבחון AND שיעור אילוף —
-      // previous fix wrongly limited to אבחון only, so שיעור אילוף + sub2=בפנסיון didn't trigger pension.
-      const sub2EligibleSubtypes = ["אבחון", "שיעור אילוף"];
-      if (sub2EligibleSubtypes.some(s => norm(s) === norm(subtype)) && norm(C.pensionSub2) === sub2) return true;
+      // sub2 (fld_1369) is conditionally shown by Origami's visibility rules.
+      // BUG FIX 2026-06-01 (dynamic, third pass): instead of hardcoding which subtypes show
+      // sub2 (was list ["אבחון","שיעור אילוף"] — too brittle), check at runtime if the field
+      // is actually VISIBLE in the DOM. If hidden, the value is stale → ignore.
+      if (norm(C.pensionSub2) === sub2) {
+        const sub2El = document.querySelector('[name="' + C.sub2Field + '"]');
+        const wrap   = sub2El ? sub2El.closest(".form_data_element_wrap") : null;
+        const visible = wrap
+          ? (!wrap.classList.contains("hidden") && !wrap.classList.contains("ng-hide") && wrap.offsetParent !== null)
+          : false;
+        if (visible) return true;
+      }
       return false;
     }
     function shouldOverwriteAddress() {
@@ -443,6 +448,40 @@ const OH = (() => {
 
       const debouncedLinked = debounce((name, val) => applyAddressFromLinkedRecord(name, val), C.applyDebounceMs);
 
+      // BUG FIX 2026-06-01 — פורום צוות / שיחת שימוע / שיחה אישית: when meeting is FROM an employee
+      // (fld_1767 set) and subtype is one of the team-meeting subtypes, also populate fld_1771
+      // (עובדים להזמנה) with the same employee. Previously the trigger employee was missing from
+      // the invited-employees list.
+      const TEAM_SUBTYPES_FILL_INVITED = new Set(["פורום צוות", "שיחת שימוע", "שיחה אישית"]);
+      function tryFillInvitedEmployees() {
+        const subtype = norm(getDomValue(C.subtypeField).norm);
+        if (!TEAM_SUBTYPES_FILL_INVITED.has(subtype)) return;
+        const empRaw = getDomValue(C.employeeField).raw;
+        if (!empRaw) return;
+        // empRaw may be "id" or '["id","text"]'
+        let id = "", text = "";
+        const v = String(empRaw).trim();
+        if (v.startsWith("[")) { const arr = safeJsonParse(v, null); if (Array.isArray(arr)) { id = arr[0] || ""; text = arr[1] || ""; } }
+        else { id = v; }
+        if (!id) return;
+        // Only fill if fld_1771 is empty / not already containing this employee
+        const cur = getDomValue("fld_1771").raw;
+        if (cur && String(cur).includes(id)) return;
+        // fld_1771 is a multi-select select2 — write as JSON array [[id,text]]
+        // First try multi-select shape: array of [id,text] pairs
+        const payload = JSON.stringify([[id, text || id]]);
+        const el = document.querySelector('[name="fld_1771"]');
+        if (!el) return;
+        el.value = payload;
+        if (typeof window.$ === "function") {
+          try { window.$(el).trigger("change"); } catch (e) { el.dispatchEvent(new Event("change", {bubbles:true})); }
+        } else {
+          el.dispatchEvent(new Event("change", {bubbles:true}));
+        }
+        mlog("👥 auto-filled fld_1771 (עובדים להזמנה) with trigger employee:", id);
+      }
+      const debouncedFillInvited = debounce(tryFillInvitedEmployees, C.applyDebounceMs);
+
       const handler = (e) => {
         const t = e.target;
         if (!t || !t.name || !t.name.startsWith("fld_")) return;
@@ -451,6 +490,8 @@ const OH = (() => {
         // addresses on the form. Now any change to the context drivers re-evaluates.
         if (t.name === C.subtypeField || t.name === C.sub2Field || t.name === C.meetingForField) debouncedApply();
         if (C.entityAddressMap[t.name]) debouncedLinked(t.name, t.value);
+        // Trigger employee-invited fill when subtype OR employee picker changes
+        if (t.name === C.subtypeField || t.name === C.employeeField) debouncedFillInvited();
       };
       document.addEventListener("change", handler, true);
       document.addEventListener("input",  handler, true);
@@ -472,6 +513,8 @@ const OH = (() => {
       // Warm pension-address cache so the override is instant when user picks a pension subtype.
       fetchPensionAddress().catch(e => warn("pension fetch warm-up error:", e));
       setTimeout(applyAddressForContext, 300);
+      // Also try filling invited-employees on bootstrap (form opened directly to פורום צוות with employee prefilled)
+      setTimeout(tryFillInvitedEmployees, 1500);
     }
 
     return { bindMeetingListeners, applyAddressIfPension };
