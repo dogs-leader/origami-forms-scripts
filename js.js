@@ -78,15 +78,6 @@ const OH = (() => {
     else { raw = sanitizeValue(el.value || el.textContent || "", { empty: "" }); }
     return { found: true, raw, norm: String(raw || "").trim(), el };
   }
-  async function waitForField(fieldName, { timeoutMs = 7000, pollMs = 200, requireValue = false } = {}) {
-    const started = Date.now();
-    while (Date.now() - started < timeoutMs) {
-      const r = getDomValue(fieldName);
-      if (r.found && (!requireValue || r.norm)) return r;
-      await sleep(pollMs);
-    }
-    return { found: false, raw: "", norm: "", el: null, timeout: true };
-  }
   function setBasicValue(fieldName, value) {
     const el = $el(fieldName);
     if (!el) return false;
@@ -262,39 +253,11 @@ const OH = (() => {
       const debouncedApply = debounce(applyAddressForContext, C.applyDebounceMs);
       const debouncedLinked = debounce((name, val) => applyAddressFromLinkedRecord(name, val), C.applyDebounceMs);
 
-      const TEAM_SUBTYPES_FILL_INVITED = new Set(["פורום צוות", "שיחת שימוע", "שיחה אישית"]);
-      function tryFillInvitedEmployees() {
-        const subtypeEl = document.querySelector('[name="' + C.subtypeField + '"]');
-        const subtype = norm(subtypeEl ? subtypeEl.value : "");
-        if (!TEAM_SUBTYPES_FILL_INVITED.has(subtype)) return;
-        const empEl = document.querySelector('[name="' + C.employeeField + '"]');
-        const empRaw = empEl ? empEl.value : "";
-        if (!empRaw) return;
-        let id = "", text = "";
-        const v = String(empRaw).trim();
-        if (v.startsWith("[")) { const arr = safeJsonParse(v, null); if (Array.isArray(arr)) { id = arr[0] || ""; text = arr[1] || ""; } } else id = v;
-        if (!id) return;
-        const curEl = document.querySelector('[name="fld_1771"]');
-        const curStr = String((curEl ? curEl.value : "") || "").trim();
-        const curIds = curStr ? curStr.split(",").map(s => s.trim()).filter(Boolean) : [];
-        if (curIds.includes(id)) return;
-        curIds.push(id);
-        const payload = curIds.join(",");
-        const el = curEl;
-        if (!el) return;
-        el.value = payload;
-        if (typeof window.$ === "function") { try { window.$(el).trigger("change"); } catch (e) { el.dispatchEvent(new Event("change", {bubbles:true})); } }
-        else el.dispatchEvent(new Event("change", {bubbles:true}));
-        mlog("👥 auto-filled fld_1771 (עובדים להזמנה) with trigger employee:", id);
-      }
-      const debouncedFillInvited = debounce(tryFillInvitedEmployees, C.applyDebounceMs);
-
       const handler = (e) => {
         const t = e.target;
         if (!t || !t.name || !t.name.startsWith("fld_")) return;
         if (t.name === C.subtypeField || t.name === C.sub2Field || t.name === C.meetingForField) debouncedApply();
         if (C.entityAddressMap[t.name]) debouncedLinked(t.name, t.value);
-        if (t.name === C.subtypeField || t.name === C.employeeField) debouncedFillInvited();
       };
       document.addEventListener("change", handler, true);
       document.addEventListener("input",  handler, true);
@@ -307,43 +270,47 @@ const OH = (() => {
       watchDynamicFields();
       fetchPensionAddress().catch(e => warn("pension fetch warm-up error:", e));
       setTimeout(applyAddressForContext, 300);
-      setTimeout(tryFillInvitedEmployees, 1500);
 
-      // BUG FIX 2026-06-01 (fifth pass — NATIVE TRIGGER): Origami's bundle has emitCaptchaLookup()
-      // which fires when scope.scopeData.value is a STRING. URL prefill writes only to el.value (DOM),
-      // not Angular scope, so the native init reads [] and skips. Fix: set scope.scopeData.value to
-      // the bare-id string + $apply() → native handler kicks in.
-      function triggerNativeMultiSelectFill(fieldName) {
+      // ★ DIAGNOSTIC PASS for fld_1771 — dumps EVERY tick exactly what we see, no silent returns
+      let diagTicks = 0;
+      const diagInterval = setInterval(() => {
+        diagTicks++;
         try {
-          const el = document.querySelector('[name="' + fieldName + '"]');
-          if (!el) return false;
-          if (!window.angular || typeof window.angular.element !== "function") { mwarn("angular.element not available for " + fieldName); return false; }
-          const $el = window.angular.element(el);
-          const scope = $el.scope() || $el.isolateScope();
-          if (!scope) { mwarn("no scope on " + fieldName + " yet"); return false; }
-          if (!scope.scopeData) { mwarn("no scopeData on " + fieldName + " (keys=" + Object.keys(scope).slice(0,15).join(",") + ")"); return false; }
-          const raw = String(el.value || "").trim();
-          if (!raw) return false;
-          if (typeof scope.scopeData.value === "object" && scope.scopeData.value && scope.scopeData.value.length > 0) return false;
-          scope.scopeData.value = raw;
-          const apply = (scope.$apply ? scope.$apply.bind(scope) : (scope.$root && scope.$root.$apply ? scope.$root.$apply.bind(scope.$root) : null)) || (() => {});
-          apply();
-          mlog("🎯 native multi-fill triggered for", fieldName, "with", raw);
-          return true;
-        } catch (e) { mwarn("triggerNativeMultiSelectFill error for " + fieldName + ":", e.message); return false; }
-      }
-      let nativeAttempts = 0;
-      const nativeInterval = setInterval(() => {
-        nativeAttempts++;
-        const ok = triggerNativeMultiSelectFill("fld_1771");
-        if (ok || nativeAttempts >= 8) clearInterval(nativeInterval);
+          const el = document.querySelector('[name="fld_1771"]');
+          if (!el) { mlog("🔍 t" + diagTicks + " fld_1771: NO ELEMENT"); return; }
+          const ng = window.angular;
+          if (!ng || typeof ng.element !== "function") { mlog("🔍 t" + diagTicks + " angular missing"); return; }
+          const $e = ng.element(el);
+          const scope = $e.scope();
+          const iso = $e.isolateScope ? $e.isolateScope() : null;
+          const elValue = el.value;
+          const elTag = el.tagName;
+          const scopeKeys = scope ? Object.keys(scope).filter(k => !k.startsWith("$")).slice(0,10) : null;
+          const sdVal = scope && scope.scopeData ? scope.scopeData.value : undefined;
+          const sdValType = typeof sdVal;
+          mlog("🔍 t" + diagTicks + " fld_1771:",
+            "elTag=" + elTag,
+            "elValue=" + JSON.stringify(elValue).slice(0,80),
+            "scope?=" + !!scope, "iso?=" + !!iso,
+            "scopeKeys=" + JSON.stringify(scopeKeys),
+            "scopeData?=" + (scope && !!scope.scopeData),
+            "sdValType=" + sdValType,
+            "sdVal=" + JSON.stringify(sdVal).slice(0,120));
+          if (scope && scope.scopeData && sdValType !== "object" && elValue) {
+            scope.scopeData.value = elValue;
+            (scope.$apply ? scope.$apply.bind(scope) : (scope.$root && scope.$root.$apply ? scope.$root.$apply.bind(scope.$root) : ()=>{}))();
+            mlog("🎯 t" + diagTicks + " injected '" + elValue + "' into scopeData.value + $apply()");
+            clearInterval(diagInterval);
+          }
+        } catch (e) { mwarn("🔍 t" + diagTicks + " err:", e.message); }
+        if (diagTicks >= 8) { mlog("🔍 stopping after 8 ticks"); clearInterval(diagInterval); }
       }, 800);
     }
 
     return { bindMeetingListeners };
   })();
 
-  return { log, warn, safeJsonParse, sanitizeValue, getDomValue, waitForField, setBasicValue, setSelect2Value, debounce, parseUrlPrefill, simpleLookup, Meeting };
+  return { log, warn, safeJsonParse, sanitizeValue, getDomValue, setBasicValue, setSelect2Value, debounce, parseUrlPrefill, simpleLookup, Meeting };
 })();
 
 OH.Meeting.bindMeetingListeners();
