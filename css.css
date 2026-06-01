@@ -2,6 +2,76 @@
    Professional Origami UI
    ========================= */
 
+/* ============================================
+   CALENDAR LAYOUT FIX 2026-06-01 — prevent time-slots from overlapping calendar grid.
+   Origami's default 3-column layout (summary | calendar | time-slots) needs explicit flex+gap
+   to avoid collision in RTL/narrow viewports. Targeted to the real Origami DOM classes.
+   ============================================ */
+.calendar-section,
+.calendar-section.desktop-calendar {
+  position: relative;
+  z-index: 1;
+}
+.summary-section,
+.summary-section.desktop-summary {
+  position: relative;
+  z-index: 2;
+}
+/* The 3-column wrapper Origami uses */
+.form_data_element_wrap > .row,
+.calendar-row,
+[ng-if*="desktop"] > .row {
+  display: flex !important;
+  flex-direction: row-reverse !important;
+  gap: 20px !important;
+  align-items: flex-start !important;
+  flex-wrap: wrap !important;
+}
+/* Time-section (column of bookable slots) — vertical pills, no overlap */
+.time-section {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  flex: 0 0 auto !important;
+  min-width: 110px;
+  position: relative;
+  z-index: 3;
+  padding: 12px !important;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.time-section > .time {
+  padding: 10px 14px !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  text-align: center !important;
+  cursor: pointer;
+  transition: all .15s;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  min-width: 90px;
+}
+.time-section > .time:hover { border-color: #3b82f6 !important; background: #eff6ff !important; }
+.time-section > .time.selected {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #fff !important;
+}
+.time-section > .time.disabled { display: none !important; }
+
+@media (max-width: 900px) {
+  .form_data_element_wrap > .row,
+  .calendar-row,
+  [ng-if*="desktop"] > .row {
+    flex-direction: column !important;
+  }
+  .time-section { width: 100% !important; flex-direction: row !important; flex-wrap: wrap; }
+  .time-section > .time { flex: 0 0 calc(33% - 8px); }
+}
+
+
 /* Tokens */
 :root{
   --primary:#3b82f6;
