@@ -24,11 +24,13 @@ const MEETING_CFG = {
     fld_1069: { entityName: "leads",   nameField: "fld_1647" },
     fld_1089: { entityName: "clients", nameField: "fld_1470" },
   },
+  multiSelectNameMap: {
+    "fld_1771": { entityName: "e_92", nameField: "fld_1567" },  // עובדים להזמנה → employees
+  },
   lookupUrl:       "https://hook.eu2.make.com/8mevgbj7owvu6sjj2dt4if6o9jenfpfj",
   pensionEntityId: "e_97",
   pensionRecordId: "6a16ff19c5f1b2ddda0d2aa2",
   pensionAddrFld:  "fld_1786",
-  select2WriteMode: "jsonArray",
   applyDebounceMs: 200,
   scanDebounceMs:  80,
 };
@@ -154,8 +156,7 @@ const OH = (() => {
         return;
       }
       if (lastLinkedAddress) {
-        if (!shouldOverwriteAddress()) { mlog("✋ address looks manual — preserving"); return; }
-        mlog("📍 restoring linked-record address:", lastLinkedAddress);
+        if (!shouldOverwriteAddress()) return;
         setBasicValue(C.addressField, lastLinkedAddress);
         lastAutoWritten = lastLinkedAddress;
       }
@@ -222,6 +223,44 @@ const OH = (() => {
       new MutationObserver(debounce(scan, C.scanDebounceMs)).observe(document.body || document.documentElement, { childList: true, subtree: true });
     }
 
+    // ★ Multi-select workaround — same pattern as resolveNamePicker for single-select.
+    // Origami's URL prefill wraps multi-select string IDs in empty array `[]` so the
+    // bundle's string-path emitCaptchaLookup never fires. We do the lookup ourselves
+    // and append <option value=id selected>name</option> to the inner <select name="fld_X[]">.
+    const resolvedMultiChips = new Set();
+    async function resolveMultiSelectChip(targetFld) {
+      const map = C.multiSelectNameMap[targetFld];
+      if (!map) return;
+      const id = urlPrefill[targetFld];
+      if (!id) return;
+      const key = targetFld + "|" + id;
+      if (resolvedMultiChips.has(key)) return;
+      resolvedMultiChips.add(key);
+      // The select element has name="fld_X[]" (HTML array notation for multi-select)
+      let select = document.querySelector(`select[name="${targetFld}[]"]`);
+      if (!select) {
+        // wait briefly — element may render after initial scan
+        await new Promise(r => setTimeout(r, 1500));
+        select = document.querySelector(`select[name="${targetFld}[]"]`);
+        if (!select) { mwarn("⚠️ " + targetFld + ": select element not found"); return; }
+      }
+      // Already populated?
+      if (select.querySelector('option[value="' + id + '"]')) { mlog("✋ " + targetFld + " chip already present"); return; }
+      const r = await simpleLookup(map.entityName, id, C.lookupUrl);
+      const rec = r?.data?.[0] || r?.data || r;
+      const name = String(extractFieldValue(rec, map.nameField) || "").trim() || id;
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = name;
+      opt.selected = true;
+      select.appendChild(opt);
+      // Trigger Select2 to render the chip
+      if (typeof window.$ === "function") {
+        try { window.$(select).trigger("change"); } catch (e) { select.dispatchEvent(new Event("change", {bubbles:true})); }
+      } else select.dispatchEvent(new Event("change", {bubbles:true}));
+      mlog("👥 " + targetFld + " chip resolved:", id, "→", name);
+    }
+
     function bindMeetingListeners() {
       urlPrefill = parseUrlPrefill();
       mlog("🔧 URL prefill:", urlPrefill);
@@ -247,37 +286,9 @@ const OH = (() => {
       fetchPensionAddress().catch(e => warn("pension fetch warm-up error:", e));
       setTimeout(applyAddressForContext, 300);
 
-      // ★ NATIVE TRIGGER for fld_1771 multi-select chip
-      // Origami's bundle has emitCaptchaLookup() which renders the chip when scope.scopeData.value is a STRING.
-      // The field's actual rendered name attr is "fld_1771[]" (multi-select array notation), not "fld_1771".
-      // The Angular isolate scope is on the inner <div scope-data="scopeData">, not on the <select>.
-      // Strategy: find the .fld_1771 wrapper class, locate [scope-data="scopeData"] inside, read its scope, set value, $apply.
-      const fld1771_targetId = urlPrefill["fld_1771"];
-      if (fld1771_targetId) {
-        let tick = 0;
-        const interval = setInterval(() => {
-          tick++;
-          try {
-            // The wrapper has class "fld_1771" on a div with class "field multi-select-from-entity fld_1771"
-            const wrapper = document.querySelector("div.fld_1771");
-            if (!wrapper) { mlog("🔍 t" + tick + " no .fld_1771 wrapper"); if (tick >= 12) clearInterval(interval); return; }
-            const scopeHolder = wrapper.querySelector('[scope-data="scopeData"]') || wrapper;
-            if (!window.angular || !window.angular.element) { mlog("🔍 t" + tick + " no angular"); if (tick >= 12) clearInterval(interval); return; }
-            const $h = window.angular.element(scopeHolder);
-            const scope = $h.isolateScope() || $h.scope();
-            if (!scope || !scope.scopeData) { mlog("🔍 t" + tick + " no scopeData (keys=" + (scope ? Object.keys(scope).slice(0, 10).join(",") : "no scope") + ")"); if (tick >= 12) clearInterval(interval); return; }
-            const sdv = scope.scopeData.value;
-            mlog("🔍 t" + tick + " scopeData.value type=" + typeof sdv + " val=" + JSON.stringify(sdv).slice(0, 100));
-            // Already resolved (array of objects)?
-            if (Array.isArray(sdv) && sdv.length > 0 && typeof sdv[0] === "object" && sdv[0].text) { mlog("✅ fld_1771 already resolved by native"); clearInterval(interval); return; }
-            // Inject bare id as STRING → triggers emitCaptchaLookup
-            scope.scopeData.value = fld1771_targetId;
-            const apply = scope.$apply ? scope.$apply.bind(scope) : (scope.$root && scope.$root.$apply ? scope.$root.$apply.bind(scope.$root) : null);
-            if (apply) apply();
-            mlog("🎯 fld_1771 injected '" + fld1771_targetId + "' into scopeData.value + $apply");
-            clearInterval(interval);
-          } catch (e) { mwarn("🔍 t" + tick + " err:", e.message); if (tick >= 12) clearInterval(interval); }
-        }, 700);
+      // Resolve multi-select chips from URL prefill (Origami doesn't do this natively)
+      for (const fld of Object.keys(C.multiSelectNameMap)) {
+        setTimeout(() => { resolveMultiSelectChip(fld).catch(e => mwarn("resolveMultiSelectChip err:", e.message)); }, 1500);
       }
     }
 
