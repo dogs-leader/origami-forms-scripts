@@ -274,10 +274,13 @@ const OH = (() => {
       if (meetingFor === norm("עובד")) return true;
       // Explicit pension subtypes
       if (C.pensionSubtypes.some(s => norm(s) === subtype)) return true;
-      // sub2 is only valid when subtype="אבחון" (fld_1369 is conditional on this) — BUG FIX 2026-06-01:
-      // previously sub2 was checked regardless, causing stale "בפנסיון" to keep pension active
-      // after the user switched subtype away from אבחון.
-      if (norm(subtype) === norm("אבחון") && norm(C.pensionSub2) === sub2) return true;
+      // sub2 (fld_1369 — "סוג פגישת אבחון/אילוף") is conditional on subtype IN {אבחון, שיעור אילוף}.
+      // BUG FIX 2026-06-01: previously sub2 was checked regardless, causing stale "בפנסיון" to
+      // keep pension active after user switched subtype to non-related types.
+      // BUG FIX 2026-06-01 (second pass): the conditional shows for BOTH אבחון AND שיעור אילוף —
+      // previous fix wrongly limited to אבחון only, so שיעור אילוף + sub2=בפנסיון didn't trigger pension.
+      const sub2EligibleSubtypes = ["אבחון", "שיעור אילוף"];
+      if (sub2EligibleSubtypes.some(s => norm(s) === norm(subtype)) && norm(C.pensionSub2) === sub2) return true;
       return false;
     }
     function shouldOverwriteAddress() {
