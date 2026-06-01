@@ -454,9 +454,15 @@ const OH = (() => {
       // the invited-employees list.
       const TEAM_SUBTYPES_FILL_INVITED = new Set(["פורום צוות", "שיחת שימוע", "שיחה אישית"]);
       function tryFillInvitedEmployees() {
-        const subtype = norm(getDomValue(C.subtypeField).norm);
+        // BUG FIX 2026-06-01: read raw DOM values directly, NOT via getDomValue.
+        // getDomValue uses select2("data") for select2 elements — returns [] when
+        // a bare-id URL prefill hasn't been resolved into a record yet → empRaw empty
+        // → function exits early and never fills fld_1771.
+        const subtypeEl = document.querySelector('[name="' + C.subtypeField + '"]');
+        const subtype = norm(subtypeEl ? subtypeEl.value : "");
         if (!TEAM_SUBTYPES_FILL_INVITED.has(subtype)) return;
-        const empRaw = getDomValue(C.employeeField).raw;
+        const empEl = document.querySelector('[name="' + C.employeeField + '"]');
+        const empRaw = empEl ? empEl.value : "";
         if (!empRaw) return;
         // empRaw may be "id" or '["id","text"]'
         let id = "", text = "";
@@ -466,8 +472,8 @@ const OH = (() => {
         if (!id) return;
         // Only skip if fld_1771 ALREADY holds proper JSON multi-select payload containing this id.
         // URL prefills (from workflow "open new window") write bare id strings — must overwrite those.
-        const cur = getDomValue("fld_1771").raw;
-        const curStr = String(cur || "").trim();
+        const curEl = document.querySelector('[name="fld_1771"]');
+        const curStr = String((curEl ? curEl.value : "") || "").trim();
         const isProperJson = curStr.startsWith("[") && curStr.includes('"' + id + '"');
         if (isProperJson) return;
         // fld_1771 is a multi-select select2 — write as JSON array [[id,text]]
