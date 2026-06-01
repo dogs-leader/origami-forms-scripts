@@ -221,24 +221,15 @@ const OH = (() => {
     const prefilledFields = new Set(); // fields we've already auto-filled from URL
     const processedLinkedRecords = new Set();  // pickerField|recordId pairs we already resolved — prevents loop
 
-    // Fetch pension address from settings entity (e_97 / fld_1786). Falls back to
-    // the hardcoded MEETING_CFG.pensionAddress if lookup fails. Cached for the
-    // duration of the form session.
-    // Extract a field value from a Make-side simple_lookup response.
-    // Observed shape (2026-05-27): { id, insertTimestamp, g_<gid>: { fld_X: value }, <entity>_details: { fld_X: value }, ... }
-    // Older shapes (Origami UI/REST direct): rec.field_groups[].fields_data[][].value OR rec[fld_X]
     function extractFieldValue(rec, fieldDataName) {
       if (!rec || !fieldDataName) return "";
-      // Shape A: any nested object key (g_<gid> or <entity>_details) — walk shallow
       for (const k of Object.keys(rec)) {
         const v = rec[k];
         if (v && typeof v === "object" && !Array.isArray(v) && v[fieldDataName] !== undefined) {
           return sanitizeValue(v[fieldDataName], { empty: "" });
         }
       }
-      // Shape B: direct property at root
       if (rec[fieldDataName] !== undefined) return sanitizeValue(rec[fieldDataName], { empty: "" });
-      // Shape C: field_groups walk
       for (const g of rec.field_groups || []) {
         for (const row of g?.fields_data || []) {
           for (const f of row || []) {
@@ -260,8 +251,6 @@ const OH = (() => {
       return addr;
     }
 
-    // Normalize a string for fuzzy comparison (NFC, trim, collapse whitespace).
-    // Protects against Unicode normalization mismatches between URL/select values and constants.
     function norm(s) {
       return String(s || "").normalize("NFC").trim().replace(/\s+/g, " ");
     }
@@ -270,14 +259,8 @@ const OH = (() => {
       const subtype = norm(getDomValue(C.subtypeField).norm);
       const sub2    = norm(getDomValue(C.sub2Field).norm);
       const meetingFor = norm(getDomValue(C.meetingForField).norm);
-      // Employees ALWAYS pension regardless of subtype
       if (meetingFor === norm("עובד")) return true;
-      // Explicit pension subtypes
       if (C.pensionSubtypes.some(s => norm(s) === subtype)) return true;
-      // sub2 (fld_1369) is conditionally shown by Origami's visibility rules.
-      // BUG FIX 2026-06-01 (dynamic, third pass): instead of hardcoding which subtypes show
-      // sub2 (was list ["אבחון","שיעור אילוף"] — too brittle), check at runtime if the field
-      // is actually VISIBLE in the DOM. If hidden, the value is stale → ignore.
       if (norm(C.pensionSub2) === sub2) {
         const sub2El = document.querySelector('[name="' + C.sub2Field + '"]');
         const wrap   = sub2El ? sub2El.closest(".form_data_element_wrap") : null;
@@ -306,16 +289,11 @@ const OH = (() => {
       lastAutoWritten = addr;
     }
 
-    // Resolve address from a linked record (lead/client) via simple_lookup, or
-    // return pension address for entities flagged as "always pension".
     async function applyAddressFromLinkedRecord(pickerFieldName, rawValue) {
       const map = C.entityAddressMap[pickerFieldName];
       if (!map) return;
-      // Don't override pension if user already in pension context
       if (isPensionContext()) return;
       if (!shouldOverwriteAddress()) { mlog("✋ address looks manual — preserving"); return; }
-
-      // Employees → always pension address
       if (!map.addressField) {
         const addr = await fetchPensionAddress();
         if (!addr) return;
@@ -324,8 +302,6 @@ const OH = (() => {
         lastAutoWritten = addr;
         return;
       }
-
-      // Parse picker value: may be "instance_id" or JSON ["instance_id","text"]
       let recordId = "";
       const v = String(rawValue || "").trim();
       if (!v) return;
@@ -337,15 +313,11 @@ const OH = (() => {
       }
       if (!recordId) return;
       const dedupeKey = pickerFieldName + "|" + recordId;
-      if (processedLinkedRecords.has(dedupeKey)) return; // already resolved this picker→record (prevents loop)
+      if (processedLinkedRecords.has(dedupeKey)) return;
       processedLinkedRecords.add(dedupeKey);
-
       mlog("🔎 lookup", map.entityName, recordId);
       const r = await simpleLookup(map.entityName, recordId, C.lookupUrl);
       const rec = r?.data?.[0] || r?.data || r;
-
-      // While we have the record, also extract the display name and update the
-      // picker so it shows "נחמן בדיקה" rather than the raw id.
       if (map.nameField) {
         const displayName = String(extractFieldValue(rec, map.nameField) || "").trim();
         if (displayName) {
@@ -353,11 +325,9 @@ const OH = (() => {
           mlog("👤 picker display →", pickerFieldName, "=", displayName);
         }
       }
-
       const addr = String(extractFieldValue(rec, map.addressField) || "").trim();
       if (!addr) { mwarn("⚠️ no address on record", recordId); return; }
-      lastLinkedAddress = addr;  // cache so we can re-apply if user toggles fld_1369 away from pension
-      // If user is currently in pension context, don't write the linked address (pension wins)
+      lastLinkedAddress = addr;
       if (isPensionContext()) { mlog("🏠 pension context active — caching linked addr but not writing"); return; }
       if (!shouldOverwriteAddress()) { mlog("✋ address looks manual — preserving"); return; }
       mlog("📍 writing linked-record address:", addr);
@@ -365,20 +335,13 @@ const OH = (() => {
       lastAutoWritten = addr;
     }
 
-    // Decide the address based on the current subtype/sub2 context.
-    // Pension context → pension address. Otherwise → re-apply the cached linked address.
-    // Wired to fld_1368 / fld_1369 changes so toggling "בפנסיון" ↔ "בבית הלקוח" updates the address.
     async function applyAddressForContext() {
       if (isPensionContext()) {
-        // BUG FIX 2026-06-01: respect manual edits before overriding to pension.
-        // Previously this forced the pension address WITHOUT calling shouldOverwriteAddress,
-        // which silently overwrote a user's typed address when they later toggled into pension.
         if (!shouldOverwriteAddress()) { mlog("✋ address looks manual — preserving (pension)"); return; }
         const addr = await fetchPensionAddress();
         if (addr) { setBasicValue(C.addressField, addr); lastAutoWritten = addr; mlog("🏠 forced pension address on subtype change:", addr); }
         return;
       }
-      // Non-pension: restore the linked record's address (if we have one cached)
       if (lastLinkedAddress) {
         if (!shouldOverwriteAddress()) { mlog("✋ address looks manual — preserving"); return; }
         mlog("📍 restoring linked-record address:", lastLinkedAddress);
@@ -387,8 +350,6 @@ const OH = (() => {
       }
     }
 
-    // Resolve a name-only picker (e.g. נציג fld_1619): given an id, look up the
-    // record's display name and write [id, name] so the picker shows the name.
     const resolvedNamePickers = new Set();
     async function resolveNamePicker(pickerField, rawValue) {
       const map = C.namePickerMap[pickerField];
@@ -415,8 +376,6 @@ const OH = (() => {
       const cur = getDomValue(name);
       if (!cur.found) return;
       if (cur.norm) { prefilledFields.add(name); return; }
-      // Lookup (select2) fields require JSON-array format even before select2 attaches.
-      // Detect via entityAddressMap / namePickerMap (known lookup picker IDs) OR runtime select2 class.
       const isLookup = !!C.entityAddressMap[name] || !!C.namePickerMap[name] || isSelect2El(cur.el);
       if (isLookup) {
         setSelect2Value(name, { id: val, text: val }, { mode: C.select2WriteMode });
@@ -425,7 +384,6 @@ const OH = (() => {
       }
       prefilledFields.add(name);
       mlog("⤵️ prefilled", name, "=", val);
-      // Name-only pickers (e.g. נציג): upgrade [id,id] → [id, name] via lookup
       if (C.namePickerMap[name]) resolveNamePicker(name, val);
     }
 
@@ -445,41 +403,25 @@ const OH = (() => {
       mlog("🔧 URL prefill:", urlPrefill);
 
       const debouncedApply = debounce(applyAddressForContext, C.applyDebounceMs);
-
       const debouncedLinked = debounce((name, val) => applyAddressFromLinkedRecord(name, val), C.applyDebounceMs);
 
-      // BUG FIX 2026-06-01 — פורום צוות / שיחת שימוע / שיחה אישית: when meeting is FROM an employee
-      // (fld_1767 set) and subtype is one of the team-meeting subtypes, also populate fld_1771
-      // (עובדים להזמנה) with the same employee. Previously the trigger employee was missing from
-      // the invited-employees list.
       const TEAM_SUBTYPES_FILL_INVITED = new Set(["פורום צוות", "שיחת שימוע", "שיחה אישית"]);
       function tryFillInvitedEmployees() {
-        // BUG FIX 2026-06-01: read raw DOM values directly, NOT via getDomValue.
-        // getDomValue uses select2("data") for select2 elements — returns [] when
-        // a bare-id URL prefill hasn't been resolved into a record yet → empRaw empty
-        // → function exits early and never fills fld_1771.
         const subtypeEl = document.querySelector('[name="' + C.subtypeField + '"]');
         const subtype = norm(subtypeEl ? subtypeEl.value : "");
         if (!TEAM_SUBTYPES_FILL_INVITED.has(subtype)) return;
         const empEl = document.querySelector('[name="' + C.employeeField + '"]');
         const empRaw = empEl ? empEl.value : "";
         if (!empRaw) return;
-        // empRaw may be "id" or '["id","text"]'
         let id = "", text = "";
         const v = String(empRaw).trim();
         if (v.startsWith("[")) { const arr = safeJsonParse(v, null); if (Array.isArray(arr)) { id = arr[0] || ""; text = arr[1] || ""; } }
         else { id = v; }
         if (!id) return;
-        // BUG FIX 2026-06-01 (third pass): Origami multi-select linked-record fields store
-        // values as COMMA-SEPARATED IDs (e.g. "id1,id2,id3"), NOT JSON [[id,name]].
-        // Verified via "אוריגמי אימפריה" WhatsApp 2026-05-27 12:27 (Origami AI bot quote):
-        // "ערך שמורכב ממזהים מופרדים בפסיקים … #ערך ישן# . "," . #ערך חדש#"
-        // URL prefills already write the bare id correctly — we only need to APPEND when
-        // the field already has other ids and our id is missing.
         const curEl = document.querySelector('[name="fld_1771"]');
         const curStr = String((curEl ? curEl.value : "") || "").trim();
         const curIds = curStr ? curStr.split(",").map(s => s.trim()).filter(Boolean) : [];
-        if (curIds.includes(id)) return;  // already present — leave alone
+        if (curIds.includes(id)) return;
         curIds.push(id);
         const payload = curIds.join(",");
         const el = curEl;
@@ -497,21 +439,13 @@ const OH = (() => {
       const handler = (e) => {
         const t = e.target;
         if (!t || !t.name || !t.name.startsWith("fld_")) return;
-        // BUG FIX 2026-06-01: also listen to meetingForField (fld_1331). Previously,
-        // switching ליד/לקוח/עובד didn't trigger address re-evaluation — leaving stale
-        // addresses on the form. Now any change to the context drivers re-evaluates.
         if (t.name === C.subtypeField || t.name === C.sub2Field || t.name === C.meetingForField) debouncedApply();
         if (C.entityAddressMap[t.name]) debouncedLinked(t.name, t.value);
-        // Trigger employee-invited fill when subtype OR employee picker changes
         if (t.name === C.subtypeField || t.name === C.employeeField) debouncedFillInvited();
       };
       document.addEventListener("change", handler, true);
       document.addEventListener("input",  handler, true);
 
-      // BUG FIX 2026-06-01: Select2 dispatches its change via jQuery's event system, which
-      // doesn't always reach native DOM addEventListener handlers (verified in dogsleader prod —
-      // picking a value in the Select2 dropdown did NOT trigger the address auto-fill).
-      // Hook into jQuery's event system as a fallback so Select2 picks DO trigger applyAddressForContext.
       if (typeof window.$ === "function") {
         try {
           window.$(document).on("change", "select[name^='fld_']", function(e) {
@@ -522,11 +456,38 @@ const OH = (() => {
       }
 
       watchDynamicFields();
-      // Warm pension-address cache so the override is instant when user picks a pension subtype.
       fetchPensionAddress().catch(e => warn("pension fetch warm-up error:", e));
       setTimeout(applyAddressForContext, 300);
-      // Also try filling invited-employees on bootstrap (form opened directly to פורום צוות with employee prefilled)
       setTimeout(tryFillInvitedEmployees, 1500);
+
+      // BUG FIX 2026-06-01 (fifth pass — NATIVE TRIGGER): Origami's bundle (lines 25184-25190)
+      // already contains the lookup+chip logic — it calls userService.emitCaptchaLookup() when
+      // scope.scopeData.value is a STRING (bare id). URL prefill writes only to el.value (DOM),
+      // not to the Angular scope, so the native init code sees scopeData.value = [] and skips.
+      // Solution: write the bare id to scopeData.value + $apply() → native handler kicks in.
+      function triggerNativeMultiSelectFill(fieldName) {
+        try {
+          const el = document.querySelector('[name="' + fieldName + '"]');
+          if (!el || typeof window.angular !== "function") return false;
+          const $el = window.angular.element(el);
+          const scope = $el.scope() || $el.isolateScope();
+          if (!scope || !scope.scopeData) return false;
+          const raw = String(el.value || "").trim();
+          if (!raw) return false;
+          if (typeof scope.scopeData.value === "object" && scope.scopeData.value && scope.scopeData.value.length > 0) return false;
+          scope.scopeData.value = raw;
+          const apply = (scope.$apply ? scope.$apply.bind(scope) : (scope.$root && scope.$root.$apply ? scope.$root.$apply.bind(scope.$root) : null)) || (() => {});
+          apply();
+          mlog("🎯 native multi-fill triggered for", fieldName, "with", raw);
+          return true;
+        } catch (e) { mwarn("triggerNativeMultiSelectFill error for " + fieldName + ":", e.message); return false; }
+      }
+      let nativeAttempts = 0;
+      const nativeInterval = setInterval(() => {
+        nativeAttempts++;
+        const ok = triggerNativeMultiSelectFill("fld_1771");
+        if (ok || nativeAttempts >= 6) clearInterval(nativeInterval);
+      }, 800);
     }
 
     return { bindMeetingListeners, applyAddressIfPension };
