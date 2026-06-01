@@ -464,9 +464,12 @@ const OH = (() => {
         if (v.startsWith("[")) { const arr = safeJsonParse(v, null); if (Array.isArray(arr)) { id = arr[0] || ""; text = arr[1] || ""; } }
         else { id = v; }
         if (!id) return;
-        // Only fill if fld_1771 is empty / not already containing this employee
+        // Only skip if fld_1771 ALREADY holds proper JSON multi-select payload containing this id.
+        // URL prefills (from workflow "open new window") write bare id strings — must overwrite those.
         const cur = getDomValue("fld_1771").raw;
-        if (cur && String(cur).includes(id)) return;
+        const curStr = String(cur || "").trim();
+        const isProperJson = curStr.startsWith("[") && curStr.includes('"' + id + '"');
+        if (isProperJson) return;
         // fld_1771 is a multi-select select2 — write as JSON array [[id,text]]
         // First try multi-select shape: array of [id,text] pairs
         const payload = JSON.stringify([[id, text || id]]);
@@ -538,4 +541,3 @@ function applyContact(id, text) {
 function applyCustomerType(valueTextOrId) {
   OH.setBasicValue(MEETING_CFG.meetingForField, valueTextOrId);
 }
-
