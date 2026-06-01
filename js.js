@@ -527,41 +527,6 @@ const OH = (() => {
       setTimeout(applyAddressForContext, 300);
       // Also try filling invited-employees on bootstrap (form opened directly to פורום צוות with employee prefilled)
       setTimeout(tryFillInvitedEmployees, 1500);
-
-      // BUG FIX 2026-06-01 (fourth pass): fld_1771 (multi-select linked-record) renders empty
-      // when populated with bare ids via URL prefill — Select2 has no <option> for the id so it
-      // can't render a chip. Resolve each id via simple_lookup → append <option value=id selected>name</option>
-      // → trigger change so Select2 picks it up and shows the chip.
-      const resolvedMultiIds = new Set();
-      async function resolveMultiSelectChips() {
-        const el = document.querySelector('[name="fld_1771"]');
-        if (!el) return;
-        const raw = String(el.value || "").trim();
-        if (!raw) return;
-        const ids = raw.split(",").map(s => s.trim()).filter(Boolean);
-        if (!ids.length) return;
-        let touched = false;
-        for (const id of ids) {
-          if (resolvedMultiIds.has(id)) continue;
-          // skip if option already exists
-          if (el.querySelector('option[value="' + id + '"]')) { resolvedMultiIds.add(id); continue; }
-          const r = await simpleLookup("e_92", id, C.lookupUrl);
-          const rec = r?.data?.[0] || r?.data || r;
-          const name = String(extractFieldValue(rec, "fld_1567") || "").trim() || id;
-          const opt = document.createElement("option");
-          opt.value = id;
-          opt.textContent = name;
-          opt.selected = true;
-          el.appendChild(opt);
-          resolvedMultiIds.add(id);
-          touched = true;
-          mlog("👥 fld_1771 chip resolved:", id, "→", name);
-        }
-        if (touched && typeof window.$ === "function") {
-          try { window.$(el).trigger("change"); } catch (e) { el.dispatchEvent(new Event("change", {bubbles:true})); }
-        }
-      }
-      setTimeout(() => { resolveMultiSelectChips().catch(e => mwarn("resolveMultiSelectChips err:", e)); }, 2000);
     }
 
     return { bindMeetingListeners, applyAddressIfPension };
