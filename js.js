@@ -19,6 +19,67 @@ const MEETING_CFG = {
   applyDebounceMs: 200, scanDebounceMs: 80,
 };
 
+// ★ Iframe-escape on submit redirect — install BEFORE Angular bootstraps so we
+// catch the form-submit XHR/fetch response. Origami forms run in iframe on
+// live-public.origamicloud.ms but redirect to dogsleader.origami.ms which has
+// X-Frame-Options:deny — blocking the iframe nav. We hijack the redirect URL
+// from the submit response and navigate window.top instead.
+(function installIframeEscape() {
+  if (window.top === window) return;  // not in iframe — nothing to do
+  const PRE = "🚪 IFRAME-ESCAPE:";
+  function findRedirectUrl(data) {
+    if (!data || typeof data !== "object") return null;
+    const keys = ["thank_you_page", "thankYouPage", "redirect_to", "redirectTo", "success_url", "successUrl", "redirect_url", "redirectUrl"];
+    for (const k of keys) if (data[k] && typeof data[k] === "string") return data[k];
+    // Recurse into nested data/result objects
+    for (const nest of ["data", "result", "response", "payload"]) {
+      if (data[nest] && typeof data[nest] === "object") { const u = findRedirectUrl(data[nest]); if (u) return u; }
+    }
+    return null;
+  }
+  function maybeRedirect(url) {
+    if (!url) return;
+    try {
+      console.log(PRE, "navigating window.top to", url);
+      window.top.location.href = url;
+    } catch (e) { console.warn(PRE, "navigation failed:", e.message); }
+  }
+  // Hook fetch
+  const origFetch = window.fetch;
+  if (origFetch) {
+    window.fetch = async function(...args) {
+      const res = await origFetch.apply(this, args);
+      try {
+        const reqUrl = (args[0] && args[0].url) || args[0] || "";
+        if (typeof reqUrl === "string" && /submit|save|create|insert/i.test(reqUrl)) {
+          const clone = res.clone();
+          clone.json().then(d => maybeRedirect(findRedirectUrl(d))).catch(() => {});
+        }
+      } catch (e) {}
+      return res;
+    };
+  }
+  // Hook XMLHttpRequest
+  const origOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    this._iframeEscapeUrl = url;
+    return origOpen.call(this, method, url, ...rest);
+  };
+  const origSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function(...args) {
+    if (this._iframeEscapeUrl && /submit|save|create|insert/i.test(this._iframeEscapeUrl)) {
+      this.addEventListener("load", () => {
+        try {
+          const data = JSON.parse(this.responseText);
+          maybeRedirect(findRedirectUrl(data));
+        } catch (e) {}
+      });
+    }
+    return origSend.apply(this, args);
+  };
+  console.log(PRE, "installed (iframe-escape ready for submit redirects)");
+})();
+
 const OH = (() => {
   const P = "🏠 MEETING";
   const log = (...a) => console.log("🦄 Origami Helper:", ...a);
@@ -155,39 +216,24 @@ const OH = (() => {
       mlog("👀 " + target + " select found");
       const r = await simpleLookup(map.entityName, id, C.lookupUrl); const rec = r?.data?.[0] || r?.data || r;
       const name = String(extractFieldValue(rec, map.nameField) || "").trim() || id;
-
       if (typeof window.$ !== "function") { mwarn("no jQuery"); return; }
-
-      // Find the REAL Select2 instance. Origami initializes Select2 on .select2-offscreen
-      // (per bundle line 24868), not on the <select>. Probe all candidates.
       const $select = window.$(select);
       const offscreen = wrapper.querySelector("input.select2-offscreen");
       const $offscreen = offscreen ? window.$(offscreen) : null;
-      // The select2-input inside select2-search-field is the search box, NOT the instance
       const candidates = [$offscreen, $select].filter(Boolean);
       let chosen = null;
       for (const $c of candidates) {
-        try { const inst = $c.data("select2"); if (inst) { chosen = $c; mlog("🎯 found select2 instance on " + (($c[0]||{}).tagName || "?") + "." + (($c[0]||{}).className||"").slice(0,40)); break; } } catch (e) {}
+        try { const inst = $c.data("select2"); if (inst) { chosen = $c; mlog("🎯 found select2 instance on " + (($c[0] || {}).tagName || "?") + "." + (($c[0] || {}).className || "").slice(0, 40)); break; } } catch (e) {}
       }
-      if (!chosen) {
-        // No instance found via .data() — fallback to underlying select directly
-        chosen = $select;
-        mwarn("no select2 instance found via .data() — falling back to <select>");
-      }
-      // Try the v3 multi-select API: select2('data', array)
-      try {
-        chosen.select2("data", [{ id: id, text: name }]);
-        mlog("🎯 select2('data', [{id,text}]) applied to instance");
-      } catch (e) { mwarn("select2('data') failed:", e.message); }
-      // Also keep the underlying <select> in sync — append option if missing
+      if (!chosen) { chosen = $select; mwarn("no select2 instance found via .data() — falling back to <select>"); }
+      try { chosen.select2("data", [{ id: id, text: name }]); mlog("🎯 select2('data', [{id,text}]) applied to instance"); }
+      catch (e) { mwarn("select2('data') failed:", e.message); }
       if (!select.querySelector('option[value="' + id + '"]')) {
         const opt = document.createElement("option"); opt.value = id; opt.textContent = name; opt.selected = true;
         select.appendChild(opt);
       } else {
-        const opt = select.querySelector('option[value="' + id + '"]');
-        opt.selected = true; if (!opt.textContent.trim()) opt.textContent = name;
+        const opt = select.querySelector('option[value="' + id + '"]'); opt.selected = true; if (!opt.textContent.trim()) opt.textContent = name;
       }
-      // Update scopeData via Angular so submit logic picks up the value
       try {
         if (window.angular) {
           const scHolder = wrapper.querySelector('[scope-data="scopeData"]') || wrapper;
