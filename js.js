@@ -150,18 +150,46 @@ const OH = (() => {
       const sel = `select[name="${target}[]"]`;
       const select = await waitForElement(sel, 10000, 400);
       if (!select) { mwarn("⚠️ " + target + ": select never appeared"); return; }
+      const wrapper = select.closest("div.fld_1771") || select.closest("[scope-data]") || select.parentElement;
+      if (!wrapper) { mwarn("⚠️ " + target + ": wrapper not found"); return; }
       mlog("👀 " + target + " select found");
       const r = await simpleLookup(map.entityName, id, C.lookupUrl); const rec = r?.data?.[0] || r?.data || r;
       const name = String(extractFieldValue(rec, map.nameField) || "").trim() || id;
-      // 1. Ensure <option> exists in <select>
+
+      if (typeof window.$ !== "function") { mwarn("no jQuery"); return; }
+
+      // Find the REAL Select2 instance. Origami initializes Select2 on .select2-offscreen
+      // (per bundle line 24868), not on the <select>. Probe all candidates.
+      const $select = window.$(select);
+      const offscreen = wrapper.querySelector("input.select2-offscreen");
+      const $offscreen = offscreen ? window.$(offscreen) : null;
+      // The select2-input inside select2-search-field is the search box, NOT the instance
+      const candidates = [$offscreen, $select].filter(Boolean);
+      let chosen = null;
+      for (const $c of candidates) {
+        try { const inst = $c.data("select2"); if (inst) { chosen = $c; mlog("🎯 found select2 instance on " + (($c[0]||{}).tagName || "?") + "." + (($c[0]||{}).className||"").slice(0,40)); break; } } catch (e) {}
+      }
+      if (!chosen) {
+        // No instance found via .data() — fallback to underlying select directly
+        chosen = $select;
+        mwarn("no select2 instance found via .data() — falling back to <select>");
+      }
+      // Try the v3 multi-select API: select2('data', array)
+      try {
+        chosen.select2("data", [{ id: id, text: name }]);
+        mlog("🎯 select2('data', [{id,text}]) applied to instance");
+      } catch (e) { mwarn("select2('data') failed:", e.message); }
+      // Also keep the underlying <select> in sync — append option if missing
       if (!select.querySelector('option[value="' + id + '"]')) {
         const opt = document.createElement("option"); opt.value = id; opt.textContent = name; opt.selected = true;
         select.appendChild(opt);
+      } else {
+        const opt = select.querySelector('option[value="' + id + '"]');
+        opt.selected = true; if (!opt.textContent.trim()) opt.textContent = name;
       }
-      // 2. Update scopeData via Angular if available (so Origami's submit logic picks up the value)
+      // Update scopeData via Angular so submit logic picks up the value
       try {
-        const wrapper = select.closest("div.fld_1771") || select.closest("[scope-data]") || select.parentElement;
-        if (window.angular && wrapper) {
+        if (window.angular) {
           const scHolder = wrapper.querySelector('[scope-data="scopeData"]') || wrapper;
           const sc = window.angular.element(scHolder).isolateScope() || window.angular.element(scHolder).scope();
           if (sc && sc.scopeData) {
@@ -171,25 +199,6 @@ const OH = (() => {
           }
         }
       } catch (e) { mwarn("scope update failed:", e.message); }
-      // 3. Inject the visual chip <li> directly into select2's choices ul
-      // Standard Select2 v3 multi-chip HTML structure
-      const container = select.parentElement.querySelector(".select2-container.select2-container-multi");
-      if (container) {
-        const ul = container.querySelector("ul.select2-choices");
-        const searchLi = ul ? ul.querySelector("li.select2-search-field") : null;
-        if (ul && searchLi && !ul.querySelector(`li.select2-search-choice[data-instance-id="${id}"]`)) {
-          const chip = document.createElement("li");
-          chip.className = "select2-search-choice";
-          chip.setAttribute("data-instance-id", id);
-          chip.innerHTML = `<div>${name.replace(/[<>&"']/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;","'":"&#39;"}[c]))}</div><a href="#" class="select2-search-choice-close" tabindex="-1"></a>`;
-          ul.insertBefore(chip, searchLi);
-          mlog("🎯 chip <li> injected into select2 choices ul");
-        }
-      } else {
-        mwarn("no select2-container found near select");
-      }
-      // 4. Also fire change so any watcher cleans up
-      if (typeof window.$ === "function") { try { window.$(select).trigger("change"); } catch (e) {} }
       mlog("👥 " + target + " chip resolved:", id, "→", name);
     }
 
