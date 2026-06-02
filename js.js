@@ -25,7 +25,7 @@ const MEETING_CFG = {
     fld_1089: { entityName: "clients", nameField: "fld_1470" },
   },
   multiSelectNameMap: {
-    "fld_1771": { entityName: "e_92", nameField: "fld_1567" },  // עובדים להזמנה → employees
+    "fld_1771": { entityName: "e_92", nameField: "fld_1567" },
   },
   lookupUrl:       "https://hook.eu2.make.com/8mevgbj7owvu6sjj2dt4if6o9jenfpfj",
   pensionEntityId: "e_97",
@@ -223,11 +223,18 @@ const OH = (() => {
       new MutationObserver(debounce(scan, C.scanDebounceMs)).observe(document.body || document.documentElement, { childList: true, subtree: true });
     }
 
-    // ★ Multi-select workaround — same pattern as resolveNamePicker for single-select.
-    // Origami's URL prefill wraps multi-select string IDs in empty array `[]` so the
-    // bundle's string-path emitCaptchaLookup never fires. We do the lookup ourselves
-    // and append <option value=id selected>name</option> to the inner <select name="fld_X[]">.
+    // Multi-select workaround — poll up to 10s for the inner <select> to appear,
+    // then lookup name + append <option> + select2('destroy') + re-init.
     const resolvedMultiChips = new Set();
+    async function waitForElement(selector, maxMs = 10000, intervalMs = 400) {
+      const start = Date.now();
+      while (Date.now() - start < maxMs) {
+        const el = document.querySelector(selector);
+        if (el) return el;
+        await new Promise(r => setTimeout(r, intervalMs));
+      }
+      return null;
+    }
     async function resolveMultiSelectChip(targetFld) {
       const map = C.multiSelectNameMap[targetFld];
       if (!map) return;
@@ -236,15 +243,10 @@ const OH = (() => {
       const key = targetFld + "|" + id;
       if (resolvedMultiChips.has(key)) return;
       resolvedMultiChips.add(key);
-      // The select element has name="fld_X[]" (HTML array notation for multi-select)
-      let select = document.querySelector(`select[name="${targetFld}[]"]`);
-      if (!select) {
-        // wait briefly — element may render after initial scan
-        await new Promise(r => setTimeout(r, 1500));
-        select = document.querySelector(`select[name="${targetFld}[]"]`);
-        if (!select) { mwarn("⚠️ " + targetFld + ": select element not found"); return; }
-      }
-      // Already populated?
+      const selector = `select[name="${targetFld}[]"]`;
+      const select = await waitForElement(selector, 10000, 400);
+      if (!select) { mwarn("⚠️ " + targetFld + ": select '" + selector + "' never appeared after 10s"); return; }
+      mlog("👀 " + targetFld + " select found, current options=" + select.options.length);
       if (select.querySelector('option[value="' + id + '"]')) { mlog("✋ " + targetFld + " chip already present"); return; }
       const r = await simpleLookup(map.entityName, id, C.lookupUrl);
       const rec = r?.data?.[0] || r?.data || r;
@@ -254,10 +256,27 @@ const OH = (() => {
       opt.textContent = name;
       opt.selected = true;
       select.appendChild(opt);
-      // Trigger Select2 to render the chip
+      mlog("➕ appended option to " + targetFld + ": " + id + " → " + name);
       if (typeof window.$ === "function") {
-        try { window.$(select).trigger("change"); } catch (e) { select.dispatchEvent(new Event("change", {bubbles:true})); }
-      } else select.dispatchEvent(new Event("change", {bubbles:true}));
+        try {
+          const $sel = window.$(select);
+          // Try to destroy + re-init Select2 so it picks up the new option
+          try {
+            const wasSelect2 = $sel.hasClass("select2-hidden-accessible") || $sel.data("select2");
+            if (wasSelect2) {
+              const opts = $sel.data("select2-options") || {};
+              $sel.select2("destroy");
+              $sel.select2(opts);
+              mlog("🔄 " + targetFld + " select2 re-initialized");
+            } else {
+              $sel.trigger("change");
+            }
+          } catch (re) {
+            mwarn("re-init failed, fallback to trigger change:", re.message);
+            $sel.trigger("change");
+          }
+        } catch (e) { select.dispatchEvent(new Event("change", { bubbles: true })); }
+      } else select.dispatchEvent(new Event("change", { bubbles: true }));
       mlog("👥 " + targetFld + " chip resolved:", id, "→", name);
     }
 
@@ -286,9 +305,9 @@ const OH = (() => {
       fetchPensionAddress().catch(e => warn("pension fetch warm-up error:", e));
       setTimeout(applyAddressForContext, 300);
 
-      // Resolve multi-select chips from URL prefill (Origami doesn't do this natively)
+      // Multi-select chip resolver — start immediately, polls up to 10s for the select to appear
       for (const fld of Object.keys(C.multiSelectNameMap)) {
-        setTimeout(() => { resolveMultiSelectChip(fld).catch(e => mwarn("resolveMultiSelectChip err:", e.message)); }, 1500);
+        resolveMultiSelectChip(fld).catch(e => mwarn("resolveMultiSelectChip err:", e.message));
       }
     }
 
