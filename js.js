@@ -153,33 +153,44 @@ const OH = (() => {
       mlog("👀 " + target + " select found");
       const r = await simpleLookup(map.entityName, id, C.lookupUrl); const rec = r?.data?.[0] || r?.data || r;
       const name = String(extractFieldValue(rec, map.nameField) || "").trim() || id;
-      // Append option (needed so the underlying form picks it up on submit)
+      // 1. Ensure <option> exists in <select>
       if (!select.querySelector('option[value="' + id + '"]')) {
         const opt = document.createElement("option"); opt.value = id; opt.textContent = name; opt.selected = true;
         select.appendChild(opt);
-        mlog("➕ appended option:", id, "→", name);
       }
-      if (typeof window.$ !== "function") { mwarn("no jQuery"); select.dispatchEvent(new Event("change", { bubbles: true })); return; }
-      const $sel = window.$(select);
-      // Try select2 v3 APIs in order
-      let ok = false;
-      try { $sel.select2("data", [{ id: id, text: name }]); mlog("🎯 select2('data', [{id,text}])"); ok = true; }
-      catch (e1) {
-        try { $sel.select2("val", [id], true); mlog("🎯 select2('val', [id])"); ok = true; }
-        catch (e2) {
-          try { $sel.val([id]).trigger("change"); mlog("🎯 val+trigger"); ok = true; }
-          catch (e3) { mwarn("all approaches failed:", e3.message); }
-        }
-      }
-      // Also fire Angular scope $apply so any watchers run
+      // 2. Update scopeData via Angular if available (so Origami's submit logic picks up the value)
       try {
-        const wrapper = select.closest("div.fld_1771,[scope-data]") || select.parentElement;
+        const wrapper = select.closest("div.fld_1771") || select.closest("[scope-data]") || select.parentElement;
         if (window.angular && wrapper) {
-          const sc = window.angular.element(wrapper).isolateScope() || window.angular.element(wrapper).scope();
-          if (sc && sc.$apply) sc.$apply(() => { if (sc.scopeData) sc.scopeData.value = [{ instance_id: id, text: name }]; });
+          const scHolder = wrapper.querySelector('[scope-data="scopeData"]') || wrapper;
+          const sc = window.angular.element(scHolder).isolateScope() || window.angular.element(scHolder).scope();
+          if (sc && sc.scopeData) {
+            sc.scopeData.value = [{ instance_id: id, text: name }];
+            if (sc.$apply) sc.$apply();
+            mlog("📝 scopeData.value updated for " + target);
+          }
         }
-      } catch (e) {}
-      if (ok) mlog("👥 " + target + " chip resolved:", id, "→", name);
+      } catch (e) { mwarn("scope update failed:", e.message); }
+      // 3. Inject the visual chip <li> directly into select2's choices ul
+      // Standard Select2 v3 multi-chip HTML structure
+      const container = select.parentElement.querySelector(".select2-container.select2-container-multi");
+      if (container) {
+        const ul = container.querySelector("ul.select2-choices");
+        const searchLi = ul ? ul.querySelector("li.select2-search-field") : null;
+        if (ul && searchLi && !ul.querySelector(`li.select2-search-choice[data-instance-id="${id}"]`)) {
+          const chip = document.createElement("li");
+          chip.className = "select2-search-choice";
+          chip.setAttribute("data-instance-id", id);
+          chip.innerHTML = `<div>${name.replace(/[<>&"']/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;","'":"&#39;"}[c]))}</div><a href="#" class="select2-search-choice-close" tabindex="-1"></a>`;
+          ul.insertBefore(chip, searchLi);
+          mlog("🎯 chip <li> injected into select2 choices ul");
+        }
+      } else {
+        mwarn("no select2-container found near select");
+      }
+      // 4. Also fire change so any watcher cleans up
+      if (typeof window.$ === "function") { try { window.$(select).trigger("change"); } catch (e) {} }
+      mlog("👥 " + target + " chip resolved:", id, "→", name);
     }
 
     function bindMeetingListeners() {
