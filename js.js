@@ -1,149 +1,87 @@
-/* ============================================================
- * Origami Helper — Meeting form (section 07 implementation)
- * ============================================================ */
+/* Origami Helper — Meeting form */
 
 const MEETING_CFG = {
-  addressField:    "fld_1162",
-  subtypeField:    "fld_1368",
-  sub2Field:       "fld_1369",
-  meetingForField: "fld_1331",
-  leadField:       "fld_1069",
-  clientField:     "fld_1089",
-  employeeField:   "fld_1767",
-  pensionAddress:  "מושב מאור",
-  pensionSubtypes: ["כניסה לפנסיון שהות", "יציאה מפנסיון שהות"],
-  pensionSub2:     "בפנסיון",
+  addressField: "fld_1162", subtypeField: "fld_1368", sub2Field: "fld_1369", meetingForField: "fld_1331",
+  leadField: "fld_1069", clientField: "fld_1089", employeeField: "fld_1767",
+  pensionAddress: "מושב מאור", pensionSubtypes: ["כניסה לפנסיון שהות", "יציאה מפנסיון שהות"], pensionSub2: "בפנסיון",
   entityAddressMap: {
-    fld_1069: { entityName: "leads",   addressField: "full_address",        nameField: "fld_1647" },
+    fld_1069: { entityName: "leads", addressField: "full_address", nameField: "fld_1647" },
     fld_1089: { entityName: "clients", addressField: "client_full_address", nameField: "fld_1470" },
-    fld_1767: { entityName: "e_92",    addressField: null,                  nameField: "fld_1567" },
+    fld_1767: { entityName: "e_92", addressField: null, nameField: "fld_1567" },
   },
   namePickerMap: {
-    fld_1619: { entityName: "e_92",    nameField: "fld_1567" },
-    fld_1767: { entityName: "e_92",    nameField: "fld_1567" },
-    fld_1069: { entityName: "leads",   nameField: "fld_1647" },
-    fld_1089: { entityName: "clients", nameField: "fld_1470" },
+    fld_1619: { entityName: "e_92", nameField: "fld_1567" }, fld_1767: { entityName: "e_92", nameField: "fld_1567" },
+    fld_1069: { entityName: "leads", nameField: "fld_1647" }, fld_1089: { entityName: "clients", nameField: "fld_1470" },
   },
-  multiSelectNameMap: {
-    "fld_1771": { entityName: "e_92", nameField: "fld_1567" },
-  },
-  lookupUrl:       "https://hook.eu2.make.com/8mevgbj7owvu6sjj2dt4if6o9jenfpfj",
-  pensionEntityId: "e_97",
-  pensionRecordId: "6a16ff19c5f1b2ddda0d2aa2",
-  pensionAddrFld:  "fld_1786",
-  applyDebounceMs: 200,
-  scanDebounceMs:  80,
+  multiSelectNameMap: { "fld_1771": { entityName: "e_92", nameField: "fld_1567" } },
+  lookupUrl: "https://hook.eu2.make.com/8mevgbj7owvu6sjj2dt4if6o9jenfpfj",
+  pensionEntityId: "e_97", pensionRecordId: "6a16ff19c5f1b2ddda0d2aa2", pensionAddrFld: "fld_1786",
+  applyDebounceMs: 200, scanDebounceMs: 80,
 };
 
 const OH = (() => {
-  const MEETING_PREFIX = "🏠 MEETING";
-  const log   = (...a) => console.log("🦄 Origami Helper:", ...a);
-  const warn  = (...a) => console.warn("🦄 Origami Helper:", ...a);
-  const mlog  = (...a) => console.log(MEETING_PREFIX + ":", ...a);
-  const mwarn = (...a) => console.warn(MEETING_PREFIX + ":", ...a);
-
-  function safeJsonParse(value, fallback = null) {
-    try { if (value === undefined || value === null) return fallback; if (typeof value === "object") return value; const s = String(value).trim(); if (!s || s === "undefined" || s === "null") return fallback; return JSON.parse(s); }
-    catch (e) { return fallback; }
-  }
-  function sanitizeValue(v, { empty = "" } = {}) {
-    if (v === undefined || v === null) return empty;
-    if (typeof v === "string") { const t = v.trim(); if (t === "undefined" || t === "null") return empty; return v; }
-    return v;
-  }
-  const $el = (name) => document.querySelector(`[name="${name}"]`);
+  const P = "🏠 MEETING";
+  const log = (...a) => console.log("🦄 Origami Helper:", ...a);
+  const warn = (...a) => console.warn("🦄 Origami Helper:", ...a);
+  const mlog = (...a) => console.log(P + ":", ...a);
+  const mwarn = (...a) => console.warn(P + ":", ...a);
+  function safeJsonParse(v, f = null) { try { if (v == null) return f; if (typeof v === "object") return v; const s = String(v).trim(); if (!s || s === "undefined" || s === "null") return f; return JSON.parse(s); } catch (e) { return f; } }
+  function sanitizeValue(v, { empty = "" } = {}) { if (v == null) return empty; if (typeof v === "string") { const t = v.trim(); if (t === "undefined" || t === "null") return empty; return v; } return v; }
+  const $el = (n) => document.querySelector(`[name="${n}"]`);
   const hasJQ = () => typeof window.$ === "function";
   const isSelect2El = (el) => !!(el && el.classList && el.classList.contains("select2-hidden-accessible"));
-
-  function getDomValue(fieldName) {
-    const el = $el(fieldName);
-    if (!el) return { found: false, raw: "", norm: "" };
+  function getDomValue(n) {
+    const el = $el(n); if (!el) return { found: false, raw: "", norm: "" };
     let raw = "";
-    if (hasJQ() && isSelect2El(el)) {
-      try { const $e = window.$(el); const data = $e.select2("data") || []; raw = data.length ? sanitizeValue(data[0].text || data[0].id, { empty: "" }) : sanitizeValue($e.val(), { empty: "" }); }
-      catch (e) { raw = sanitizeValue(el.value, { empty: "" }); }
-    } else raw = sanitizeValue(el.value, { empty: "" });
+    if (hasJQ() && isSelect2El(el)) { try { const $e = window.$(el); const d = $e.select2("data") || []; raw = d.length ? sanitizeValue(d[0].text || d[0].id, { empty: "" }) : sanitizeValue($e.val(), { empty: "" }); } catch (e) { raw = sanitizeValue(el.value, { empty: "" }); } }
+    else raw = sanitizeValue(el.value, { empty: "" });
     return { found: true, raw, norm: String(raw || "").trim(), el };
   }
-  function setBasicValue(fieldName, value) {
-    const el = $el(fieldName);
-    if (!el) return false;
-    el.value = sanitizeValue(value, { empty: "" });
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-    return true;
-  }
-  function setSelect2Value(fieldName, { id, text }) {
-    const el = $el(fieldName);
-    if (!el) return false;
-    const safeId = sanitizeValue(id, { empty: "" });
-    const safeText = sanitizeValue(text, { empty: "" });
-    if (!safeId && !safeText) return setBasicValue(fieldName, "[]");
-    const payload = JSON.stringify([safeId, safeText].filter(x => x !== "")) || "[]";
-    el.value = payload;
+  function setBasicValue(n, v) { const el = $el(n); if (!el) return false; el.value = sanitizeValue(v, { empty: "" }); el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); return true; }
+  function setSelect2Value(n, { id, text }) {
+    const el = $el(n); if (!el) return false;
+    const sid = sanitizeValue(id, { empty: "" }), stx = sanitizeValue(text, { empty: "" });
+    if (!sid && !stx) return setBasicValue(n, "[]");
+    el.value = JSON.stringify([sid, stx].filter(x => x !== "")) || "[]";
     if (hasJQ() && isSelect2El(el)) { try { window.$(el).trigger("change"); } catch (e) { el.dispatchEvent(new Event("change", { bubbles: true })); } }
     else el.dispatchEvent(new Event("change", { bubbles: true }));
     return true;
   }
-  function debounce(fn, delayMs = 250) { let t = null; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delayMs); }; }
+  function debounce(fn, ms = 250) { let t = null; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
   function parseUrlPrefill() {
-    const map = {};
-    try {
-      const u = new URL(window.location.href); const f = u.searchParams.get("fields");
-      if (!f) return map;
-      for (const pair of f.split(",")) { const i = pair.indexOf(":"); if (i < 0) continue; const k = pair.slice(0, i).trim(); const v = pair.slice(i + 1); if (k) map[k] = v; }
-    } catch (e) { warn("parseUrlPrefill error:", e); }
-    return map;
+    const m = {};
+    try { const u = new URL(window.location.href); const f = u.searchParams.get("fields"); if (!f) return m; for (const p of f.split(",")) { const i = p.indexOf(":"); if (i < 0) continue; const k = p.slice(0, i).trim(); const v = p.slice(i + 1); if (k) m[k] = v; } } catch (e) { warn("parseUrlPrefill error:", e); }
+    return m;
   }
-  async function simpleLookup(entityId, recordId, lookupUrl) {
-    try { const res = await fetch(lookupUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tag: "simple_lookup", entity_id: entityId, record_id: recordId }) }); return await res.json(); }
-    catch (e) { warn("simpleLookup error:", e); return null; }
-  }
+  async function simpleLookup(eId, rId, url) { try { const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tag: "simple_lookup", entity_id: eId, record_id: rId }) }); return await r.json(); } catch (e) { warn("simpleLookup error:", e); return null; } }
 
   const Meeting = (() => {
     const C = MEETING_CFG;
-    let urlPrefill = {};
-    let lastAutoWritten = null;
-    let pensionAddressCache = null;
-    let lastLinkedAddress = null;
-    const prefilledFields = new Set();
-    const processedLinkedRecords = new Set();
-
-    function extractFieldValue(rec, fieldDataName) {
-      if (!rec || !fieldDataName) return "";
-      for (const k of Object.keys(rec)) { const v = rec[k]; if (v && typeof v === "object" && !Array.isArray(v) && v[fieldDataName] !== undefined) return sanitizeValue(v[fieldDataName], { empty: "" }); }
-      if (rec[fieldDataName] !== undefined) return sanitizeValue(rec[fieldDataName], { empty: "" });
-      for (const g of rec.field_groups || []) for (const row of g?.fields_data || []) for (const f of row || []) if (f?.field_data_name === fieldDataName) return sanitizeValue(f.value, { empty: "" });
-      return "";
-    }
+    let urlPrefill = {}, lastAutoWritten = null, pensionAddressCache = null, lastLinkedAddress = null;
+    const prefilledFields = new Set(), processedLinkedRecords = new Set();
+    function extractFieldValue(rec, fn) { if (!rec || !fn) return ""; for (const k of Object.keys(rec)) { const v = rec[k]; if (v && typeof v === "object" && !Array.isArray(v) && v[fn] !== undefined) return sanitizeValue(v[fn], { empty: "" }); } if (rec[fn] !== undefined) return sanitizeValue(rec[fn], { empty: "" }); for (const g of rec.field_groups || []) for (const row of g?.fields_data || []) for (const f of row || []) if (f?.field_data_name === fn) return sanitizeValue(f.value, { empty: "" }); return ""; }
     async function fetchPensionAddress() {
       if (pensionAddressCache !== null) return pensionAddressCache;
       const r = await simpleLookup(C.pensionEntityId, C.pensionRecordId, C.lookupUrl);
       const rec = r?.data?.[0] || r?.data || r;
-      let addr = String(extractFieldValue(rec, C.pensionAddrFld) || "").trim();
-      if (!addr) { mwarn("⚠️ pension lookup empty, using fallback"); addr = C.pensionAddress; }
-      pensionAddressCache = addr;
-      mlog("📍 pension address resolved:", addr);
-      return addr;
+      let a = String(extractFieldValue(rec, C.pensionAddrFld) || "").trim();
+      if (!a) { mwarn("⚠️ pension lookup empty, using fallback"); a = C.pensionAddress; }
+      pensionAddressCache = a; mlog("📍 pension address resolved:", a); return a;
     }
     function norm(s) { return String(s || "").normalize("NFC").trim().replace(/\s+/g, " "); }
     function isPensionContext() {
-      const subtype = norm(getDomValue(C.subtypeField).norm);
-      const sub2 = norm(getDomValue(C.sub2Field).norm);
-      const meetingFor = norm(getDomValue(C.meetingForField).norm);
-      if (meetingFor === norm("עובד")) return true;
-      if (C.pensionSubtypes.some(s => norm(s) === subtype)) return true;
-      if (norm(C.pensionSub2) === sub2) {
-        const sub2El = document.querySelector('[name="' + C.sub2Field + '"]');
-        const wrap = sub2El ? sub2El.closest(".form_data_element_wrap") : null;
-        const visible = wrap ? (!wrap.classList.contains("hidden") && !wrap.classList.contains("ng-hide") && wrap.offsetParent !== null) : false;
-        if (visible) return true;
+      const st = norm(getDomValue(C.subtypeField).norm), s2 = norm(getDomValue(C.sub2Field).norm), mf = norm(getDomValue(C.meetingForField).norm);
+      if (mf === norm("עובד")) return true;
+      if (C.pensionSubtypes.some(s => norm(s) === st)) return true;
+      if (norm(C.pensionSub2) === s2) {
+        const el = document.querySelector('[name="' + C.sub2Field + '"]'); const w = el ? el.closest(".form_data_element_wrap") : null;
+        const v = w ? (!w.classList.contains("hidden") && !w.classList.contains("ng-hide") && w.offsetParent !== null) : false;
+        if (v) return true;
       }
       return false;
     }
     function shouldOverwriteAddress() {
-      const cur = norm(getDomValue(C.addressField).norm);
-      if (!cur) return true;
+      const cur = norm(getDomValue(C.addressField).norm); if (!cur) return true;
       if (lastAutoWritten && cur === norm(lastAutoWritten)) return true;
       if (urlPrefill[C.addressField] && cur === norm(urlPrefill[C.addressField])) return true;
       return false;
@@ -151,71 +89,47 @@ const OH = (() => {
     async function applyAddressForContext() {
       if (isPensionContext()) {
         if (!shouldOverwriteAddress()) { mlog("✋ address looks manual — preserving (pension)"); return; }
-        const addr = await fetchPensionAddress();
-        if (addr) { setBasicValue(C.addressField, addr); lastAutoWritten = addr; mlog("🏠 forced pension address on subtype change:", addr); }
+        const a = await fetchPensionAddress();
+        if (a) { setBasicValue(C.addressField, a); lastAutoWritten = a; mlog("🏠 forced pension address on subtype change:", a); }
         return;
       }
-      if (lastLinkedAddress) {
-        if (!shouldOverwriteAddress()) return;
-        setBasicValue(C.addressField, lastLinkedAddress);
-        lastAutoWritten = lastLinkedAddress;
-      }
+      if (lastLinkedAddress) { if (!shouldOverwriteAddress()) return; setBasicValue(C.addressField, lastLinkedAddress); lastAutoWritten = lastLinkedAddress; }
     }
-    async function applyAddressFromLinkedRecord(pickerFieldName, rawValue) {
-      const map = C.entityAddressMap[pickerFieldName];
-      if (!map) return;
-      if (isPensionContext()) return;
-      if (!shouldOverwriteAddress()) return;
-      if (!map.addressField) { const addr = await fetchPensionAddress(); if (!addr) return; setBasicValue(C.addressField, addr); lastAutoWritten = addr; return; }
-      let recordId = "";
-      const v = String(rawValue || "").trim();
-      if (!v) return;
-      if (v.startsWith("[")) { const arr = safeJsonParse(v, null); if (Array.isArray(arr) && arr[0]) recordId = String(arr[0]); } else recordId = v;
-      if (!recordId) return;
-      const dedupeKey = pickerFieldName + "|" + recordId;
-      if (processedLinkedRecords.has(dedupeKey)) return;
-      processedLinkedRecords.add(dedupeKey);
-      const r = await simpleLookup(map.entityName, recordId, C.lookupUrl);
-      const rec = r?.data?.[0] || r?.data || r;
-      if (map.nameField) { const displayName = String(extractFieldValue(rec, map.nameField) || "").trim(); if (displayName) setSelect2Value(pickerFieldName, { id: recordId, text: displayName }); }
-      const addr = String(extractFieldValue(rec, map.addressField) || "").trim();
-      if (!addr) return;
-      lastLinkedAddress = addr;
-      if (isPensionContext()) return;
-      if (!shouldOverwriteAddress()) return;
-      setBasicValue(C.addressField, addr);
-      lastAutoWritten = addr;
+    async function applyAddressFromLinkedRecord(pfn, rv) {
+      const map = C.entityAddressMap[pfn]; if (!map) return;
+      if (isPensionContext()) return; if (!shouldOverwriteAddress()) return;
+      if (!map.addressField) { const a = await fetchPensionAddress(); if (!a) return; setBasicValue(C.addressField, a); lastAutoWritten = a; return; }
+      let rid = ""; const v = String(rv || "").trim(); if (!v) return;
+      if (v.startsWith("[")) { const a = safeJsonParse(v, null); if (Array.isArray(a) && a[0]) rid = String(a[0]); } else rid = v;
+      if (!rid) return;
+      const k = pfn + "|" + rid; if (processedLinkedRecords.has(k)) return; processedLinkedRecords.add(k);
+      const r = await simpleLookup(map.entityName, rid, C.lookupUrl); const rec = r?.data?.[0] || r?.data || r;
+      if (map.nameField) { const dn = String(extractFieldValue(rec, map.nameField) || "").trim(); if (dn) setSelect2Value(pfn, { id: rid, text: dn }); }
+      const ad = String(extractFieldValue(rec, map.addressField) || "").trim(); if (!ad) return;
+      lastLinkedAddress = ad;
+      if (isPensionContext()) return; if (!shouldOverwriteAddress()) return;
+      setBasicValue(C.addressField, ad); lastAutoWritten = ad;
     }
     const resolvedNamePickers = new Set();
-    async function resolveNamePicker(pickerField, rawValue) {
-      const map = C.namePickerMap[pickerField];
-      if (!map) return;
-      let id = "";
-      const v = String(rawValue || "").trim();
-      if (!v) return;
+    async function resolveNamePicker(pf, rv) {
+      const map = C.namePickerMap[pf]; if (!map) return;
+      let id = ""; const v = String(rv || "").trim(); if (!v) return;
       if (v.startsWith("[")) { const a = safeJsonParse(v, null); if (Array.isArray(a) && a[0]) id = String(a[0]); } else id = v;
       if (!id) return;
-      const key = pickerField + "|" + id;
-      if (resolvedNamePickers.has(key)) return;
-      resolvedNamePickers.add(key);
-      const r = await simpleLookup(map.entityName, id, C.lookupUrl);
-      const rec = r?.data?.[0] || r?.data || r;
-      const name = String(extractFieldValue(rec, map.nameField) || "").trim();
-      if (name) setSelect2Value(pickerField, { id, text: name });
+      const k = pf + "|" + id; if (resolvedNamePickers.has(k)) return; resolvedNamePickers.add(k);
+      const r = await simpleLookup(map.entityName, id, C.lookupUrl); const rec = r?.data?.[0] || r?.data || r;
+      const n = String(extractFieldValue(rec, map.nameField) || "").trim();
+      if (n) setSelect2Value(pf, { id, text: n });
     }
-    function fillFromUrlIfPossible(name) {
-      if (prefilledFields.has(name)) return;
-      const val = urlPrefill[name];
-      if (val === undefined || val === "") return;
-      const cur = getDomValue(name);
-      if (!cur.found) return;
-      if (cur.norm) { prefilledFields.add(name); return; }
-      const isLookup = !!C.entityAddressMap[name] || !!C.namePickerMap[name] || isSelect2El(cur.el);
-      if (isLookup) setSelect2Value(name, { id: val, text: val });
-      else setBasicValue(name, val);
-      prefilledFields.add(name);
-      mlog("⤵️ prefilled", name, "=", val);
-      if (C.namePickerMap[name]) resolveNamePicker(name, val);
+    function fillFromUrlIfPossible(n) {
+      if (prefilledFields.has(n)) return;
+      const val = urlPrefill[n]; if (val === undefined || val === "") return;
+      const cur = getDomValue(n); if (!cur.found) return;
+      if (cur.norm) { prefilledFields.add(n); return; }
+      const isLookup = !!C.entityAddressMap[n] || !!C.namePickerMap[n] || isSelect2El(cur.el);
+      if (isLookup) setSelect2Value(n, { id: val, text: val }); else setBasicValue(n, val);
+      prefilledFields.add(n); mlog("⤵️ prefilled", n, "=", val);
+      if (C.namePickerMap[n]) resolveNamePicker(n, val);
     }
     function watchDynamicFields() {
       const scan = () => { for (const el of document.querySelectorAll('input[name^="fld_"], select[name^="fld_"], textarea[name^="fld_"]')) if (el.name) fillFromUrlIfPossible(el.name); };
@@ -223,101 +137,77 @@ const OH = (() => {
       new MutationObserver(debounce(scan, C.scanDebounceMs)).observe(document.body || document.documentElement, { childList: true, subtree: true });
     }
 
-    // Multi-select workaround — poll up to 10s for the inner <select> to appear,
-    // then lookup name + append <option> + select2('destroy') + re-init.
     const resolvedMultiChips = new Set();
-    async function waitForElement(selector, maxMs = 10000, intervalMs = 400) {
+    async function waitForElement(sel, maxMs = 10000, intervalMs = 400) {
       const start = Date.now();
-      while (Date.now() - start < maxMs) {
-        const el = document.querySelector(selector);
-        if (el) return el;
-        await new Promise(r => setTimeout(r, intervalMs));
-      }
+      while (Date.now() - start < maxMs) { const el = document.querySelector(sel); if (el) return el; await new Promise(r => setTimeout(r, intervalMs)); }
       return null;
     }
-    async function resolveMultiSelectChip(targetFld) {
-      const map = C.multiSelectNameMap[targetFld];
-      if (!map) return;
-      const id = urlPrefill[targetFld];
-      if (!id) return;
-      const key = targetFld + "|" + id;
-      if (resolvedMultiChips.has(key)) return;
-      resolvedMultiChips.add(key);
-      const selector = `select[name="${targetFld}[]"]`;
-      const select = await waitForElement(selector, 10000, 400);
-      if (!select) { mwarn("⚠️ " + targetFld + ": select '" + selector + "' never appeared after 10s"); return; }
-      mlog("👀 " + targetFld + " select found, current options=" + select.options.length);
-      if (select.querySelector('option[value="' + id + '"]')) { mlog("✋ " + targetFld + " chip already present"); return; }
-      const r = await simpleLookup(map.entityName, id, C.lookupUrl);
-      const rec = r?.data?.[0] || r?.data || r;
+    async function resolveMultiSelectChip(target) {
+      const map = C.multiSelectNameMap[target]; if (!map) return;
+      const id = urlPrefill[target]; if (!id) return;
+      const k = target + "|" + id; if (resolvedMultiChips.has(k)) return; resolvedMultiChips.add(k);
+      const sel = `select[name="${target}[]"]`;
+      const select = await waitForElement(sel, 10000, 400);
+      if (!select) { mwarn("⚠️ " + target + ": select never appeared"); return; }
+      mlog("👀 " + target + " select found");
+      const r = await simpleLookup(map.entityName, id, C.lookupUrl); const rec = r?.data?.[0] || r?.data || r;
       const name = String(extractFieldValue(rec, map.nameField) || "").trim() || id;
-      const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = name;
-      opt.selected = true;
-      select.appendChild(opt);
-      mlog("➕ appended option to " + targetFld + ": " + id + " → " + name);
-      if (typeof window.$ === "function") {
-        try {
-          const $sel = window.$(select);
-          // Try to destroy + re-init Select2 so it picks up the new option
-          try {
-            const wasSelect2 = $sel.hasClass("select2-hidden-accessible") || $sel.data("select2");
-            if (wasSelect2) {
-              const opts = $sel.data("select2-options") || {};
-              $sel.select2("destroy");
-              $sel.select2(opts);
-              mlog("🔄 " + targetFld + " select2 re-initialized");
-            } else {
-              $sel.trigger("change");
-            }
-          } catch (re) {
-            mwarn("re-init failed, fallback to trigger change:", re.message);
-            $sel.trigger("change");
-          }
-        } catch (e) { select.dispatchEvent(new Event("change", { bubbles: true })); }
-      } else select.dispatchEvent(new Event("change", { bubbles: true }));
-      mlog("👥 " + targetFld + " chip resolved:", id, "→", name);
+      // Append option (needed so the underlying form picks it up on submit)
+      if (!select.querySelector('option[value="' + id + '"]')) {
+        const opt = document.createElement("option"); opt.value = id; opt.textContent = name; opt.selected = true;
+        select.appendChild(opt);
+        mlog("➕ appended option:", id, "→", name);
+      }
+      if (typeof window.$ !== "function") { mwarn("no jQuery"); select.dispatchEvent(new Event("change", { bubbles: true })); return; }
+      const $sel = window.$(select);
+      // Try select2 v3 APIs in order
+      let ok = false;
+      try { $sel.select2("data", [{ id: id, text: name }]); mlog("🎯 select2('data', [{id,text}])"); ok = true; }
+      catch (e1) {
+        try { $sel.select2("val", [id], true); mlog("🎯 select2('val', [id])"); ok = true; }
+        catch (e2) {
+          try { $sel.val([id]).trigger("change"); mlog("🎯 val+trigger"); ok = true; }
+          catch (e3) { mwarn("all approaches failed:", e3.message); }
+        }
+      }
+      // Also fire Angular scope $apply so any watchers run
+      try {
+        const wrapper = select.closest("div.fld_1771,[scope-data]") || select.parentElement;
+        if (window.angular && wrapper) {
+          const sc = window.angular.element(wrapper).isolateScope() || window.angular.element(wrapper).scope();
+          if (sc && sc.$apply) sc.$apply(() => { if (sc.scopeData) sc.scopeData.value = [{ instance_id: id, text: name }]; });
+        }
+      } catch (e) {}
+      if (ok) mlog("👥 " + target + " chip resolved:", id, "→", name);
     }
 
     function bindMeetingListeners() {
-      urlPrefill = parseUrlPrefill();
-      mlog("🔧 URL prefill:", urlPrefill);
-
+      urlPrefill = parseUrlPrefill(); mlog("🔧 URL prefill:", urlPrefill);
       const debouncedApply = debounce(applyAddressForContext, C.applyDebounceMs);
-      const debouncedLinked = debounce((name, val) => applyAddressFromLinkedRecord(name, val), C.applyDebounceMs);
-
+      const debouncedLinked = debounce((n, v) => applyAddressFromLinkedRecord(n, v), C.applyDebounceMs);
       const handler = (e) => {
-        const t = e.target;
-        if (!t || !t.name || !t.name.startsWith("fld_")) return;
+        const t = e.target; if (!t || !t.name || !t.name.startsWith("fld_")) return;
         if (t.name === C.subtypeField || t.name === C.sub2Field || t.name === C.meetingForField) debouncedApply();
         if (C.entityAddressMap[t.name]) debouncedLinked(t.name, t.value);
       };
-      document.addEventListener("change", handler, true);
-      document.addEventListener("input", handler, true);
-
+      document.addEventListener("change", handler, true); document.addEventListener("input", handler, true);
       if (typeof window.$ === "function") {
         try { window.$(document).on("change", "select[name^='fld_']", function () { handler({ target: this }); }); mlog("✅ jQuery change listener attached (Select2 compat)"); }
         catch (e) { mwarn("could not attach jQuery listener:", e); }
       }
-
       watchDynamicFields();
       fetchPensionAddress().catch(e => warn("pension fetch warm-up error:", e));
       setTimeout(applyAddressForContext, 300);
-
-      // Multi-select chip resolver — start immediately, polls up to 10s for the select to appear
       for (const fld of Object.keys(C.multiSelectNameMap)) {
         resolveMultiSelectChip(fld).catch(e => mwarn("resolveMultiSelectChip err:", e.message));
       }
     }
-
     return { bindMeetingListeners };
   })();
-
   return { log, warn, safeJsonParse, sanitizeValue, getDomValue, setBasicValue, setSelect2Value, debounce, parseUrlPrefill, simpleLookup, Meeting };
 })();
 
 OH.Meeting.bindMeetingListeners();
-
 function applyContact(id, text) { OH.setSelect2Value(MEETING_CFG.clientField, { id, text }); }
-function applyCustomerType(valueTextOrId) { OH.setBasicValue(MEETING_CFG.meetingForField, valueTextOrId); }
+function applyCustomerType(v) { OH.setBasicValue(MEETING_CFG.meetingForField, v); }
